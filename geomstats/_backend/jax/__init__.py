@@ -319,7 +319,7 @@ def get_slice(x, indices):
     >>> get_slice(a, ((0, 2), (8, 9)))
     array([8, 29])
     """
-    return x[indices]
+    return x[indices]  # TODO: error when indices=(range(n_rot_mats), max_line_index) from examples/loss_and_gradient_so3.py
 
 
 def vectorize(x, pyfunc, multiple_args=False, signature=None, **kwargs):
