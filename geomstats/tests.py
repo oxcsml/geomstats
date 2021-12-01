@@ -16,6 +16,11 @@ def autograd_backend():
     return os.environ["GEOMSTATS_BACKEND"] == "autograd"
 
 
+def jax_backend():
+    """Check if autograd is set as backend."""
+    return os.environ["GEOMSTATS_BACKEND"] == "jax"
+
+
 def np_backend():
     """Check if numpy is set as backend."""
     return os.environ["GEOMSTATS_BACKEND"] == "numpy"
@@ -61,7 +66,7 @@ def np_and_torch_only(test_item):
 
 def np_and_autograd_only(test_item):
     """Decorate to filter tests for numpy and autograd only."""
-    if np_backend() or autograd_backend():
+    if np_backend() or autograd_backend() or jax_backend():
         return test_item
     return unittest.skip("Test for numpy and autograd backends only.")(test_item)
 
@@ -89,7 +94,7 @@ def tf_only(test_item):
 
 def np_autograd_and_tf_only(test_item):
     """Decorate to filter tests for numpy, autograd and tf only."""
-    if np_backend() or autograd_backend() or tf_backend():
+    if np_backend() or autograd_backend() or tf_backend() or jax_backend():
         return test_item
     return unittest.skip("Test for numpy, autograd and tensorflow backends only.")(
         test_item
@@ -132,6 +137,7 @@ if pytorch_backend():
 
 
 def pytorch_error_msg(a, b, rtol, atol):
+    import torch
     msg = f"\ntensor 1\n{a}\ntensor 2\n{b}"
     if torch.is_tensor(a) and torch.is_tensor(b):
         if a.dtype == torch.bool and b.dtype == torch.bool:

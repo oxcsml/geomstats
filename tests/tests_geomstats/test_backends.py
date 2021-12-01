@@ -72,7 +72,7 @@ class TestBackends(geomstats.tests.TestCase):
         np_mat_b = _np.array(mat_b)
         np_mat_c = _np.array(mat_c)
 
-        gs_result = gs.matmul(gs_mat_a, [gs_mat_b, gs_mat_c])
+        gs_result = gs.matmul(gs_mat_a, gs.stack([gs_mat_b, gs_mat_c]))
         np_result = _np.matmul(np_mat_a, [np_mat_b, np_mat_c])
 
         self.assertAllCloseToNp(gs_result, np_result)
@@ -740,14 +740,14 @@ class TestBackends(geomstats.tests.TestCase):
         gs_list = [gs.array([1, 2]), gs.array([2.2, 3.3], dtype=gs.float32)]
         gs_result = gs.convert_to_wider_dtype(gs_list)
 
-        result = [a.dtype == gs.float32 for a in gs_result]
+        result = gs.array([a.dtype == gs.float32 for a in gs_result])
 
         self.assertTrue(gs.all(result))
 
         gs_list = [gs.array([1, 2]), gs.array([2.2, 3.3], dtype=gs.float64)]
         gs_result = gs.convert_to_wider_dtype(gs_list)
 
-        result = [a.dtype == gs.float64 for a in gs_result]
+        result = gs.array([a.dtype == gs.float64 for a in gs_result])
 
         self.assertTrue(gs.all(result))
 
@@ -757,7 +757,7 @@ class TestBackends(geomstats.tests.TestCase):
         ]
         gs_result = gs.convert_to_wider_dtype(gs_list)
 
-        result = [a.dtype == gs.float64 for a in gs_result]
+        result = gs.array([a.dtype == gs.float64 for a in gs_result])
 
         self.assertTrue(gs.all(result))
 
