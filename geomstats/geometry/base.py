@@ -1,7 +1,7 @@
 """Manifold embedded in another manifold."""
 
 import abc
-
+import numpy as np
 import geomstats.backend as gs
 from geomstats.geometry.manifold import Manifold
 
@@ -21,7 +21,7 @@ class VectorSpace(Manifold, abc.ABC):
 
     def __init__(self, shape, default_point_type="vector", **kwargs):
         if "dim" not in kwargs.keys():
-            kwargs["dim"] = int(gs.prod(gs.array(shape)))
+            kwargs["dim"] = int(np.prod(np.array(shape)))
         super(VectorSpace, self).__init__(
             default_point_type=default_point_type, **kwargs
         )

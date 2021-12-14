@@ -214,7 +214,7 @@ class Sphere:
         points_x = [point[0] for point in points]
         points_y = [point[1] for point in points]
         points_z = [point[2] for point in points]
-        ax.scatter(points_x, points_y, points_z, **scatter_kwargs)
+        scatter = ax.scatter(points_x, points_y, points_z, **scatter_kwargs)
 
         for i_point, point in enumerate(points):
             if "label" in scatter_kwargs:
@@ -228,6 +228,7 @@ class Sphere:
                         zorder=1,
                         color="k",
                     )
+        return scatter
 
     def fibonnaci_points(self, n_points=16000):
         """Spherical Fibonacci point sets yield nearly uniform point
