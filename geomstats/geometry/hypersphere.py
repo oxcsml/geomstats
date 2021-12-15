@@ -490,6 +490,24 @@ class _Hypersphere(EmbeddedManifold):
         sample = metric.exp(tangent_sample_at_pt, mean)
         return sample[0] if (n_samples == 1) else sample
 
+    def invariant_basis(self, x):
+        """
+        f_ij=x^i partial_j - x^j partial_i for 0 <= i < j <= dim
+        Returns
+        -------
+        basis : torch.tensor
+            invariant basis with shape [batch_size, dim(G), dim(G)].
+        """
+        if self.dim != 2:
+            raise NotImplementedError()
+        else:
+            zeros = gs.zeros((*x.shape[:-1], 1))
+            f_01 = gs.expand_dims(gs.concatenate([-x[..., [1]], x[..., [0]], zeros], axis=-1), axis=-1)
+            f_02 = gs.expand_dims(gs.concatenate([-x[..., [2]], zeros, x[..., [0]]], axis=-1), axis=-1)
+            f_12 = gs.expand_dims(gs.concatenate([zeros, -x[..., [2]], x[..., [1]]], axis=-1), axis=-1)
+            basis = gs.concatenate([f_01, f_02, f_12], axis=-1)
+            return basis
+
 
 class HypersphereMetric(RiemannianMetric):
     """Class for the Hypersphere Metric.
