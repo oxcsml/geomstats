@@ -1,4 +1,4 @@
-"""Wrapper around autograd functions to be consistent with backends."""
+"""Wrapper around jax functions to be consistent with backends."""
 
 import jax.numpy as anp
 from jax import vmap, grad

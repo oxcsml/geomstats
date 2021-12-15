@@ -1,4 +1,4 @@
-"""Autograd based linear algebra backend."""
+"""Jax based linear algebra backend."""
 
 import jax.numpy as np
 import numpy as _np

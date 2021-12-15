@@ -296,6 +296,25 @@ class EmbeddedManifold(Manifold, abc.ABC):
             Tangent vector at base point.
         """
 
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.embedding_space.dim))
+        return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
+
 
 class OpenSet(Manifold, abc.ABC):
     """Class for manifolds that are open sets of a vector space.

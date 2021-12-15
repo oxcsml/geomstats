@@ -241,8 +241,8 @@ class _Hypersphere(EmbeddedManifold):
             Points sampled on the hypersphere.
         """
         return self.random_uniform(n_samples)
-
-    def random_uniform(self, n_samples=1):
+    
+    def random_uniform(self, state, n_samples=1):
         """Sample in the hypersphere from the uniform distribution.
 
         Parameters
@@ -258,20 +258,43 @@ class _Hypersphere(EmbeddedManifold):
         """
         size = (n_samples, self.dim + 1)
 
-        samples = gs.random.normal(size=size)
-        while True:
-            norms = gs.linalg.norm(samples, axis=1)
-            indcs = gs.isclose(norms, 0.0, atol=gs.atol)
-            num_bad_samples = gs.sum(indcs)
-            if num_bad_samples == 0:
-                break
-            new_samples = gs.random.normal(size=(num_bad_samples, self.dim + 1))
-            samples = self._replace_values(samples, new_samples, indcs)
-
+        _, samples = gs.random.normal(state=state, size=size)
+        norms = gs.linalg.norm(samples, axis=1)
         samples = gs.einsum("..., ...i->...i", 1 / norms, samples)
         if n_samples == 1:
             samples = gs.squeeze(samples, axis=0)
         return samples
+
+    # def random_uniform(self, n_samples=1):
+    #     """Sample in the hypersphere from the uniform distribution.
+
+    #     Parameters
+    #     ----------
+    #     n_samples : int
+    #         Number of samples.
+    #         Optional, default: 1.
+
+    #     Returns
+    #     -------
+    #     samples : array-like, shape=[..., dim + 1]
+    #         Points sampled on the hypersphere.
+    #     """
+    #     size = (n_samples, self.dim + 1)
+
+    #     samples = gs.random.normal(size=size)
+    #     while True:
+    #         norms = gs.linalg.norm(samples, axis=1)
+    #         indcs = gs.isclose(norms, 0.0, atol=gs.atol)
+    #         num_bad_samples = gs.sum(indcs)
+    #         if num_bad_samples == 0:
+    #             break
+    #         new_samples = gs.random.normal(size=(num_bad_samples, self.dim + 1))
+    #         samples = self._replace_values(samples, new_samples, indcs)
+
+    #     samples = gs.einsum("..., ...i->...i", 1 / norms, samples)
+    #     if n_samples == 1:
+    #         samples = gs.squeeze(samples, axis=0)
+    #     return samples
 
     def random_von_mises_fisher(self, mu=None, kappa=10, n_samples=1, max_iter=100):
         """Sample with the von Mises-Fisher distribution.
@@ -753,6 +776,14 @@ class HypersphereMetric(RiemannianMetric):
         first_term = gs.einsum("...,...i->...i", inner_bc, tangent_vec_a)
         second_term = gs.einsum("...,...i->...i", inner_ac, tangent_vec_b)
         return -first_term + second_term
+
+
+    @property
+    def log_volume(self):
+        """log area of n-sphere https://en.wikipedia.org/wiki/N-sphere#Closed_forms"""
+        half_dim = (self.dim + 1) / 2
+        return math.log(2) + half_dim * math.log(math.pi) - math.lgamma(half_dim)
+
 
     def _normalization_factor_odd_dim(self, variances):
         """Compute the normalization factor - odd dimension."""
