@@ -490,6 +490,30 @@ class _Hypersphere(EmbeddedManifold):
         sample = metric.exp(tangent_sample_at_pt, mean)
         return sample[0] if (n_samples == 1) else sample
 
+    def log_heat_kernel(self, x0, x, t, n_max=5):
+        """log p_t(x, y) = \sum^\infty_n e^{-t \lambda_n} \psi_n(x) \psi_n(y)"""
+        # NOTE: Should we rely on the Russian roulette estimator even though the log would bias it?
+        if self.dim == 1:
+            # Coincides with wrapped normal https://en.wikipedia.org/wiki/Wrapped_normal_distribution
+            raise NotImplementedError()
+        elif self.dim == 2:
+            # log p_t(x, y) = \sum^\infty_{n=0} e^{-n(n+1)t} \frac{2n + 1}{4 \pi} P_n(x^\top y)
+            # TODO: optimised with jax? need batch_mul ?
+            from jax.scipy.special import lpmn_values
+            n = gs.arange(0, n_max + 1)
+            # TODO: Is there indeed a 1 / 4 in the exp and a 1 / (4 * gs.pi)?
+            coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + 1) / (4 * gs.pi)
+            cos_theta = gs.sum(x0 * x, axis=-1)
+            #  When m is zero and l integer, associated legendre polynomials are identical to the Legendre polynomials.
+            # Would likely be faster to implement directly legendre polynomials: (n+1)P_{n+1}(x)=(2n+1)xP_{n}(x)-nP_{n-1}(x)
+            # see https://issueexplorer.com/issue/google/jax/2991
+            P_n = lpmn_values(n_max, n_max, cos_theta, is_normalized=False)[0, :, :]
+            probs = gs.expand_dims(coeffs, axis=-1) * P_n
+            prob = gs.sum(probs, axis=0)
+            return gs.log(prob)
+        else:
+            raise NotImplementedError()
+
     def invariant_basis(self, x):
         """
         f_ij=x^i partial_j - x^j partial_i for 0 <= i < j <= dim

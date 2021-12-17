@@ -150,3 +150,6 @@ class Manifold(abc.ABC):
             if metric.dim != self.dim:
                 metric.dim = self.dim
         self._metric = metric
+
+    def random_walk(self, rng, x, t):
+        return None
