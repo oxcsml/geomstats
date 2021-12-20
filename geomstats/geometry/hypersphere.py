@@ -16,6 +16,32 @@ from geomstats.geometry.base import EmbeddedManifold
 from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 
+import jax
+from jax.scipy.special import lpmn_values
+def batch_mul(a, b):
+    return jax.vmap(lambda a, b: a * b)(a, b)
+
+
+def gegenbauer_polynomials(alpha: float, l_max: int, x):
+    """https://en.wikipedia.org/wiki/Gegenbauer_polynomials"""
+    p = gs.zeros((l_max + 1, x.shape[0]))
+    C_0 = gs.ones_like(x)
+    C_1 = 2 * alpha * x
+    p = p.at[0].set(C_0)
+    p = p.at[1].set(C_1)
+
+    def body_fun(n, p_val):
+        C_nm1 = p_val[n-1]
+        C_nm2 = p_val[n-2]
+        C_n = 1 / n * (2 * x * (n + alpha - 1) * C_nm1 - (n + 2 * alpha - 2) * C_nm2)
+        p_val = p_val.at[n].set(C_n)
+        return p_val
+
+    if l_max > 1:
+        p = jax.lax.fori_loop(lower=2, upper=l_max+1, body_fun=body_fun, init_val=p)
+
+    return p
+
 
 class _Hypersphere(EmbeddedManifold):
     """Private class for the n-dimensional hypersphere.
@@ -490,29 +516,27 @@ class _Hypersphere(EmbeddedManifold):
         sample = metric.exp(tangent_sample_at_pt, mean)
         return sample[0] if (n_samples == 1) else sample
 
-    def log_heat_kernel(self, x0, x, t, n_max=5):
-        """log p_t(x, y) = \sum^\infty_n e^{-t \lambda_n} \psi_n(x) \psi_n(y)"""
+    def _log_heat_kernel(self, x0, x, t, n_max=5):
+        """
+        log p_t(x, y) = \sum^\infty_n e^{-t \lambda_n} \psi_n(x) \psi_n(y)
+        = \sum^\infty_n e^{-n(n+1)t} \frac{2n+d-1}{d-1} \frac{1}{A_{\mathbb{S}^n}} \mathcal{C}_n^{(d-1)/2}(x \cdot y
+        """
         # NOTE: Should we rely on the Russian roulette estimator even though the log would bias it?
-        if self.dim == 1:
-            # Coincides with wrapped normal https://en.wikipedia.org/wiki/Wrapped_normal_distribution
-            raise NotImplementedError()
-        elif self.dim == 2:
-            # log p_t(x, y) = \sum^\infty_{n=0} e^{-n(n+1)t} \frac{2n + 1}{4 \pi} P_n(x^\top y)
-            # TODO: optimised with jax? need batch_mul ?
-            from jax.scipy.special import lpmn_values
-            n = gs.arange(0, n_max + 1)
-            # TODO: Is there indeed a 1 / 4 in the exp and a 1 / (4 * gs.pi)?
-            coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + 1) / (4 * gs.pi)
-            cos_theta = gs.sum(x0 * x, axis=-1)
-            #  When m is zero and l integer, associated legendre polynomials are identical to the Legendre polynomials.
-            # Would likely be faster to implement directly legendre polynomials: (n+1)P_{n+1}(x)=(2n+1)xP_{n}(x)-nP_{n-1}(x)
-            # see https://issueexplorer.com/issue/google/jax/2991
-            P_n = lpmn_values(n_max, n_max, cos_theta, is_normalized=False)[0, :, :]
-            probs = gs.expand_dims(coeffs, axis=-1) * P_n
-            prob = gs.sum(probs, axis=0)
-            return gs.log(prob)
-        else:
-            raise NotImplementedError()
+        d = self.dim
+        # if d == 2:
+        #     # log p_t(x, y) = \sum^\infty_{n=0} e^{-n(n+1)t} \frac{2n + 1}{4 \pi} P_n(x^\top y)
+        #     coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + 1) / (4 * gs.pi)
+        #     #  When m is zero and l integer, associated legendre polynomials are identical to the Legendre polynomials.
+        #     # Would likely be faster to implement directly legendre polynomials: (n+1)P_{n+1}(x)=(2n+1)xP_{n}(x)-nP_{n-1}(x)
+        #     # see https://issueexplorer.com/issue/google/jax/2991
+        #     P_n = lpmn_values(n_max, n_max, cos_theta, is_normalized=False)[0, :, :]
+        n = gs.arange(0, n_max + 1)
+        coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
+        cos_theta = gs.sum(x0 * x, axis=-1)
+        P_n = gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
+        probs = batch_mul(gs.expand_dims(coeffs, axis=-1), P_n)
+        prob = gs.sum(probs, axis=0)
+        return gs.log(prob)
 
     def invariant_basis(self, x):
         """
@@ -819,6 +843,10 @@ class HypersphereMetric(RiemannianMetric):
         second_term = gs.einsum("...,...i->...i", inner_ac, tangent_vec_b)
         return -first_term + second_term
 
+    def log_metric_polar(self, radius_squared):
+        # NOTE: taylor_exp_even_func takes x^2 as input
+        sinc = utils.taylor_exp_even_func(radius_squared, utils.sinc_close_0)
+        return (self.dim - 1) * gs.log(sinc)
 
     @property
     def log_volume(self):
@@ -826,6 +854,10 @@ class HypersphereMetric(RiemannianMetric):
         half_dim = (self.dim + 1) / 2
         return math.log(2) + half_dim * math.log(math.pi) - math.lgamma(half_dim)
 
+    @property
+    def volume(self):
+        half_dim = (self.dim + 1) / 2
+        return 2 * gs.pi ** half_dim / math.gamma(half_dim)
 
     def _normalization_factor_odd_dim(self, variances):
         """Compute the normalization factor - odd dimension."""

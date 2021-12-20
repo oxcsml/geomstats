@@ -315,6 +315,21 @@ class EmbeddedManifold(Manifold, abc.ABC):
         state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.embedding_space.dim))
         return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
 
+    def log_heat_kernel_exp(self, x0, x, t):
+        r_squared = self.metric.squared_dist(x0, x)
+        log_u_0 = - 0.5 * self.metric.log_metric_polar(r_squared)
+        return - self.dim / 2 * gs.log(4 * gs.pi) \
+            - self.dim / 2 * gs.log(t) \
+            - r_squared / (4 * t) \
+            + log_u_0
+
+    def log_heat_kernel(self, x0, x, t, tol=0.05, n_max=5):
+        # TODO: How to choose condition? should condition be on radius not on time? 
+        cond = t <= tol
+        approx = self.log_heat_kernel_exp(x0, x, t)
+        exact = self._log_heat_kernel(x0, x, t, n_max=n_max)
+        return gs.where(cond, approx, exact)
+
 
 class OpenSet(Manifold, abc.ABC):
     """Class for manifolds that are open sets of a vector space.
