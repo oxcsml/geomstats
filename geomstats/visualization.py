@@ -263,7 +263,7 @@ class Sphere:
         """Plot a heatmap defined by a loss on the sphere."""
         points = self.fibonnaci_points(n_points)
         intensity = gs.array([scalar_function(x) for x in points.T])
-        ax.scatter(
+        return ax.scatter(
             points[0, :],
             points[1, :],
             points[2, :],
