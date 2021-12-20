@@ -24,7 +24,8 @@ def batch_mul(a, b):
 
 def gegenbauer_polynomials(alpha: float, l_max: int, x):
     """https://en.wikipedia.org/wiki/Gegenbauer_polynomials"""
-    p = gs.zeros((l_max + 1, x.shape[0]))
+    shape = x.shape if len(x.shape) > 0 else (1,)
+    p = gs.zeros((l_max + 1, shape[0]))
     C_0 = gs.ones_like(x)
     C_1 = 2 * alpha * x
     p = p.at[0].set(C_0)
@@ -530,11 +531,12 @@ class _Hypersphere(EmbeddedManifold):
         #     # Would likely be faster to implement directly legendre polynomials: (n+1)P_{n+1}(x)=(2n+1)xP_{n}(x)-nP_{n-1}(x)
         #     # see https://issueexplorer.com/issue/google/jax/2991
         #     P_n = lpmn_values(n_max, n_max, cos_theta, is_normalized=False)[0, :, :]
-        n = gs.arange(0, n_max + 1)
+        n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
+        t = gs.expand_dims(t, axis=0)
         coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
         cos_theta = gs.sum(x0 * x, axis=-1)
         P_n = gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
-        probs = batch_mul(gs.expand_dims(coeffs, axis=-1), P_n)
+        probs = batch_mul(coeffs, P_n)
         prob = gs.sum(probs, axis=0)
         return gs.log(prob)
 
