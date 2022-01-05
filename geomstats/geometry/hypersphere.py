@@ -517,6 +517,23 @@ class _Hypersphere(EmbeddedManifold):
         sample = metric.exp(tangent_sample_at_pt, mean)
         return sample[0] if (n_samples == 1) else sample
 
+    def random_walk(self, rng, x, t):
+        if self.dim == 1:
+            # # https://stats.stackexchange.com/questions/146424/sample-from-a-von-mises-distribution-by-transforming-a-rv
+            # x = gs.arctan2(x[...,1], x[...,0])
+            # _, z = gs.random.normal(state=rng, size=[*x.shape[:-1], 1])
+            # std = gs.exp(- t / 2)
+            # y = x + std * z
+            # theta = gs.mod(y, 2 * gs.pi)
+            # theta = gs.expand_dims(theta, axis=-1)
+            # samples = gs.concatenate([gs.cos(theta), gs.sin(theta)], axis=-1)
+            rng, z = self.random_normal_tangent(state=rng, base_point=x, n_samples=x.shape[0])
+            tangent_vector = gs.sqrt(2 * t) * z
+            samples = self.metric.exp(tangent_vec=tangent_vector, base_point=x)
+            return samples
+        else:
+            return None
+
     def _log_heat_kernel(self, x0, x, t, n_max=5):
         """
         log p_t(x, y) = \sum^\infty_n e^{-t \lambda_n} \psi_n(x) \psi_n(y)
@@ -524,6 +541,16 @@ class _Hypersphere(EmbeddedManifold):
         """
         # NOTE: Should we rely on the Russian roulette estimator even though the log would bias it?
         d = self.dim
+        if d == 1:
+            n = gs.expand_dims(gs.arange(- n_max, n_max + 1), axis=-1)
+            t = gs.expand_dims(t, axis=0)
+            sigma_squared = 2 * t  # NOTE: factor 2 is needed empirically to match kernel
+            cos_theta = gs.sum(x0 * x, axis=-1)
+            theta = gs.arccos(cos_theta)
+            coeffs = gs.exp(-gs.power(theta + 2 * math.pi * n, 2) / 2 / sigma_squared)
+            prob = gs.sum(coeffs, axis=0)
+            prob = prob / gs.sqrt(2 * math.pi * sigma_squared)
+        else:
         # if d == 2:
         #     # log p_t(x, y) = \sum^\infty_{n=0} e^{-n(n+1)t} \frac{2n + 1}{4 \pi} P_n(x^\top y)
         #     coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + 1) / (4 * gs.pi)
@@ -531,13 +558,13 @@ class _Hypersphere(EmbeddedManifold):
         #     # Would likely be faster to implement directly legendre polynomials: (n+1)P_{n+1}(x)=(2n+1)xP_{n}(x)-nP_{n-1}(x)
         #     # see https://issueexplorer.com/issue/google/jax/2991
         #     P_n = lpmn_values(n_max, n_max, cos_theta, is_normalized=False)[0, :, :]
-        n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
-        t = gs.expand_dims(t, axis=0)
-        coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
-        cos_theta = gs.sum(x0 * x, axis=-1)
-        P_n = gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
-        probs = batch_mul(coeffs, P_n)
-        prob = gs.sum(probs, axis=0)
+            n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
+            t = gs.expand_dims(t, axis=0)
+            coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
+            cos_theta = gs.sum(x0 * x, axis=-1)
+            P_n = gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
+            probs = batch_mul(coeffs, P_n)
+            prob = gs.sum(probs, axis=0)
         return gs.log(prob)
 
     def invariant_basis(self, x):
