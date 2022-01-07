@@ -323,7 +323,7 @@ class EmbeddedManifold(Manifold, abc.ABC):
             - r_squared / (4 * t) \
             + log_u_0
 
-    def log_heat_kernel(self, x0, x, t, tol=0.05, n_max=5):
+    def log_heat_kernel(self, x0, x, t, tol=0.05, n_max=10):
         # TODO: How to choose condition? should condition be on radius not on time? 
         cond = t <= tol
         approx = self.log_heat_kernel_exp(x0, x, t)

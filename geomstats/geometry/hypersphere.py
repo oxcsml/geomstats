@@ -534,7 +534,7 @@ class _Hypersphere(EmbeddedManifold):
         else:
             return None
 
-    def _log_heat_kernel(self, x0, x, t, n_max=5):
+    def _log_heat_kernel(self, x0, x, t, n_max):
         """
         log p_t(x, y) = \sum^\infty_n e^{-t \lambda_n} \psi_n(x) \psi_n(y)
         = \sum^\infty_n e^{-n(n+1)t} \frac{2n+d-1}{d-1} \frac{1}{A_{\mathbb{S}^n}} \mathcal{C}_n^{(d-1)/2}(x \cdot y
@@ -566,6 +566,20 @@ class _Hypersphere(EmbeddedManifold):
             probs = batch_mul(coeffs, P_n)
             prob = gs.sum(probs, axis=0)
         return gs.log(prob)
+
+    # def grad_heat_kernel(self, x0, x, t, n_max=5):
+    #     d = self.dim
+    #     if d == 1:
+    #         raise NotImplementedError()
+    #     else:
+    #         n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
+    #         t = gs.expand_dims(t, axis=0)
+    #         coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
+    #         cos_theta = gs.sum(x0 * x, axis=-1)
+    #         P_prime_n = derivative_gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
+    #         probs = batch_mul(coeffs, P_prime_n)
+    #         prob = gs.sum(probs, axis=0)
+    #     return prob
 
     def invariant_basis(self, x):
         """
