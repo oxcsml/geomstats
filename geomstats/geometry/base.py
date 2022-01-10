@@ -316,6 +316,7 @@ class EmbeddedManifold(Manifold, abc.ABC):
         return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
 
     def log_heat_kernel_exp(self, x0, x, t):
+        t = t / 2  # NOTE: to match random walk
         r_squared = self.metric.squared_dist(x0, x)
         log_u_0 = - 0.5 * self.metric.log_metric_polar(r_squared)
         return - self.dim / 2 * gs.log(4 * gs.pi) \
@@ -323,7 +324,7 @@ class EmbeddedManifold(Manifold, abc.ABC):
             - r_squared / (4 * t) \
             + log_u_0
 
-    def log_heat_kernel(self, x0, x, t, tol=0.05, n_max=10):
+    def log_heat_kernel(self, x0, x, t, tol=0.1, n_max=10):
         # TODO: How to choose condition? should condition be on radius not on time? 
         cond = t <= tol
         approx = self.log_heat_kernel_exp(x0, x, t)

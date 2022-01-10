@@ -528,7 +528,7 @@ class _Hypersphere(EmbeddedManifold):
             # theta = gs.expand_dims(theta, axis=-1)
             # samples = gs.concatenate([gs.cos(theta), gs.sin(theta)], axis=-1)
             rng, z = self.random_normal_tangent(state=rng, base_point=x, n_samples=x.shape[0])
-            tangent_vector = gs.sqrt(2 * t) * z
+            tangent_vector = gs.sqrt(t) * z
             samples = self.metric.exp(tangent_vec=tangent_vector, base_point=x)
             return samples
         else:
@@ -540,6 +540,7 @@ class _Hypersphere(EmbeddedManifold):
         = \sum^\infty_n e^{-n(n+1)t} \frac{2n+d-1}{d-1} \frac{1}{A_{\mathbb{S}^n}} \mathcal{C}_n^{(d-1)/2}(x \cdot y
         """
         # NOTE: Should we rely on the Russian roulette estimator even though the log would bias it?
+        t = t / 2  # NOTE: to match random walk
         d = self.dim
         if d == 1:
             n = gs.expand_dims(gs.arange(- n_max, n_max + 1), axis=-1)
