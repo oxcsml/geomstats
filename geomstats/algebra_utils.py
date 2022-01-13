@@ -223,6 +223,8 @@ def rotate_points(points, end_point):
     norm = gs.linalg.norm(end_point)
     q, _ = gs.linalg.qr(gs.transpose(embedded) / norm)
     new_points = gs.matmul(points[None, :], gs.transpose(q)) * norm
-    if not gs.allclose(gs.matmul(q, base_point[:, None])[:, 0], end_point):
-        new_points = -new_points
+    # if not gs.allclose(gs.matmul(q, base_point[:, None])[:, 0], end_point):
+        # new_points = -new_points
+    cond = gs.isclose(gs.matmul(q, base_point[:, None])[:, 0], end_point)
+    new_points = gs.where(cond, new_points, -new_points)
     return new_points[0]
