@@ -68,6 +68,13 @@ class _Hypersphere(EmbeddedManifold):
             tangent_submersion=lambda v, x: 2 * gs.sum(x * v, axis=-1),
         )
         self.isom_group = SpecialOrthogonal(n=dim+1)
+        self.c = 1.
+
+    @property
+    def base_point(self):
+        out = gs.zeros((1, self.embedding_space.dim))
+        out[..., 0] = 1. / gs.sqrt(self.c)
+        return out
 
     def projection(self, point):
         """Project a point on the hypersphere.
@@ -583,13 +590,14 @@ class _Hypersphere(EmbeddedManifold):
     #         prob = gs.sum(probs, axis=0)
     #     return prob
 
-    def invariant_basis(self, x):
+    def div_free_generators(self, x):
         """
         f_ij=x^i partial_j - x^j partial_i for 0 <= i < j <= dim
         Returns
         -------
-        basis : torch.tensor
-            invariant basis with shape [batch_size, dim(G), dim(G)].
+        generators : torch.tensor
+            generators induced by isometry group lie algebra basis
+            shape=[batch_size, dim+1, dim(SO(dim+1))].
         """
         if self.dim != 2:
             raise NotImplementedError()
@@ -598,8 +606,43 @@ class _Hypersphere(EmbeddedManifold):
             f_01 = gs.expand_dims(gs.concatenate([-x[..., [1]], x[..., [0]], zeros], axis=-1), axis=-1)
             f_02 = gs.expand_dims(gs.concatenate([-x[..., [2]], zeros, x[..., [0]]], axis=-1), axis=-1)
             f_12 = gs.expand_dims(gs.concatenate([zeros, -x[..., [2]], x[..., [1]]], axis=-1), axis=-1)
-            basis = gs.concatenate([f_01, f_02, f_12], axis=-1)
-            return basis
+            generators = gs.concatenate([f_01, f_02, f_12], axis=-1)
+            return generators
+
+    def eigen_generators(self, x):
+        """
+        f_i(x) = e_i - <x, e_i> x  for 1 <= i <= dim + 1
+        Returns
+        -------
+        generators : torch.tensor
+            gradient of laplacian eigenfunctions with eigenvalue=1
+            shape=[batch_size, dim+1, dim+1].
+        """
+        ei = gs.expand_dims(gs.eye(self.embedding_space.dim), 0)
+        # sq_norm = gs.sum(x ** 2, axis=-1, keepdims=True)
+        coef = gs.einsum('...d,...dn->...n', x, ei)
+        coef = coef# / sq_norm
+        generators = ei - gs.einsum("...n,...d->...dn", coef, x)
+        return generators
+
+    def stereographic_projection(self, x):
+        xi = x[...,[0]]
+        x = x[...,1:]
+        out = x / (1 + self.c.sqrt() * xi + gs.atol)
+        return out
+
+    def inv_stereographic_projection(self, y):
+        y_norm_sq = gs.sum(gs.power(y, 2), -1, keepdims=True)
+        denom = 1 + self.c * y_norm_sq
+        xi = (1 - self.c * y_norm_sq) / denom / self.c.sqrt()
+        x = 2 * y / denom
+        out = gs.concatenate([xi, x], -1)
+        return out
+
+    def inv_stereographic_projection_logdet(self, y):
+        y_norm_sq = gs.sum(gs.power(y, 2), -1, keepdims=True)
+        out = -(self.dim) * (math.log2 - gs.log1p(self.c * y_norm_sq))
+        return out
 
 
 class HypersphereMetric(RiemannianMetric):
@@ -675,6 +718,10 @@ class HypersphereMetric(RiemannianMetric):
         """
         sq_norm = self.embedding_metric.squared_norm(vector)
         return sq_norm
+
+    @property
+    def injectivity_radius(self):
+        return 2 * math.pi / gs.sqrt(self._space.c)
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Compute the Riemannian exponential of a tangent vector.
@@ -887,6 +934,11 @@ class HypersphereMetric(RiemannianMetric):
         first_term = gs.einsum("...,...i->...i", inner_bc, tangent_vec_a)
         second_term = gs.einsum("...,...i->...i", inner_ac, tangent_vec_b)
         return -first_term + second_term
+
+    def logdetexp(self, x, y, is_vector=False):
+        r_squared = self.squared_norm(y, x) if is_vector else self.squared_dist(x, y)
+        r_squared = self._space.c * r_squared
+        return self.log_metric_polar(r_squared)
 
     def log_metric_polar(self, radius_squared):
         # NOTE: taylor_exp_even_func takes x^2 as input
