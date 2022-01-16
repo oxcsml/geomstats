@@ -71,10 +71,13 @@ class _Hypersphere(EmbeddedManifold):
         self.c = 1.
 
     @property
-    def base_point(self):
-        out = gs.zeros((1, self.embedding_space.dim))
-        out[..., 0] = 1. / gs.sqrt(self.c)
-        return out
+    def injectivity_radius(self):
+        return math.pi / gs.sqrt(self.c)
+
+    @property
+    def identity(self):
+        out = gs.zeros((self.embedding_space.dim))
+        return gs.assignment(out, 1. / gs.sqrt(self.c), (0), axis=-1)
 
     def projection(self, point):
         """Project a point on the hypersphere.
@@ -626,22 +629,22 @@ class _Hypersphere(EmbeddedManifold):
         return generators
 
     def stereographic_projection(self, x):
-        xi = x[...,[0]]
-        x = x[...,1:]
-        out = x / (1 + self.c.sqrt() * xi + gs.atol)
+        xi = x[..., [0]]
+        x = x[..., 1:]
+        out = x / (1 + gs.sqrt(self.c) * xi + gs.atol)
         return out
 
     def inv_stereographic_projection(self, y):
         y_norm_sq = gs.sum(gs.power(y, 2), -1, keepdims=True)
         denom = 1 + self.c * y_norm_sq
-        xi = (1 - self.c * y_norm_sq) / denom / self.c.sqrt()
+        xi = (1 - self.c * y_norm_sq) / denom / gs.sqrt(self.c)
         x = 2 * y / denom
         out = gs.concatenate([xi, x], -1)
         return out
 
     def inv_stereographic_projection_logdet(self, y):
-        y_norm_sq = gs.sum(gs.power(y, 2), -1, keepdims=True)
-        out = -(self.dim) * (math.log2 - gs.log1p(self.c * y_norm_sq))
+        y_norm_sq = gs.sum(gs.power(y, 2), -1)
+        out = (self.dim) * (math.log(2) - gs.log1p(self.c * y_norm_sq))
         return out
 
 
@@ -718,10 +721,6 @@ class HypersphereMetric(RiemannianMetric):
         """
         sq_norm = self.embedding_metric.squared_norm(vector)
         return sq_norm
-
-    @property
-    def injectivity_radius(self):
-        return 2 * math.pi / gs.sqrt(self._space.c)
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Compute the Riemannian exponential of a tangent vector.

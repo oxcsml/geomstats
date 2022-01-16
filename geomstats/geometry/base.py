@@ -139,6 +139,23 @@ class VectorSpace(Manifold, abc.ABC):
         point = bound * (gs.random.rand(*size) - 0.5) * 2
         return point
 
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        return gs.random.normal(state=state, size=(n_samples, self.dim))
+
 
 class EmbeddedManifold(Manifold, abc.ABC):
     """Class for manifolds embedded in a vector space.
