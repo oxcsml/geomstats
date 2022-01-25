@@ -39,6 +39,7 @@ from torch import (
     isnan,
     less,
     log,
+    log1p,
     logical_or,
 )
 from torch import max as amax

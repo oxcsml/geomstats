@@ -79,6 +79,7 @@ erf = tf.math.erf
 imag = tf.math.imag
 isnan = tf.math.is_nan
 log = tf.math.log
+log1p = tf.math.log1p
 mod = tf.math.mod
 polygamma = tf.math.polygamma
 power = tf.math.pow

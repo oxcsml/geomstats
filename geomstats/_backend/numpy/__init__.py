@@ -59,6 +59,7 @@ from numpy import (
     less_equal,
     linspace,
     log,
+    log1p,
     logical_and,
     logical_or,
     matmul,
