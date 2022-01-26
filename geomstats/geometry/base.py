@@ -341,13 +341,26 @@ class EmbeddedManifold(Manifold, abc.ABC):
             - r_squared / (4 * t) \
             + log_u_0
 
-    def log_heat_kernel(self, x0, x, t, tol=0.1, n_max=10):
+    def log_heat_kernel(self, x0, x, t, thresh=0.1, n_max=10):
         # TODO: How to choose condition? should condition be on radius not on time? 
-        cond = t <= tol
+        cond = t <= thresh
         approx = self.log_heat_kernel_exp(x0, x, t)
         exact = self._log_heat_kernel(x0, x, t, n_max=n_max)
         return gs.where(cond, approx, exact)
 
+    def grad_log_heat_kernel_exp(self, x0, x, t):
+        t = t / 2  # NOTE: to match random walk
+        return - self.metric.log(x0, x) / gs.expand_dims(t, -1)
+
+    def grad_marginal_log_prob(self, x0, x, t, thresh=0., n_max=10):
+        import jax
+        cond = gs.expand_dims(t <= thresh, -1)
+        approx = self.grad_log_heat_kernel_exp(x0, x, t)
+        log_heat_kernel = lambda x0, x, s: gs.reshape(self.log_heat_kernel(x0, x, s, n_max=n_max), ())
+        logp_grad_fn = jax.grad(log_heat_kernel, argnums=1)
+        logp_grad = jax.vmap(logp_grad_fn)(x0, x, t)
+        exact = self.to_tangent(logp_grad, x)
+        return gs.where(cond, approx, exact)
 
 class OpenSet(Manifold, abc.ABC):
     """Class for manifolds that are open sets of a vector space.
