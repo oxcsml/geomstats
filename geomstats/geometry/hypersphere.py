@@ -573,7 +573,8 @@ class _Hypersphere(EmbeddedManifold):
             n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
             t = gs.expand_dims(t, axis=0)
             coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
-            cos_theta = gs.sum(x0 * x, axis=-1)
+            inner_prod = gs.sum(x0 * x, axis=-1)
+            cos_theta = gs.clip(inner_prod, -1.0, 1.0)
             P_n = gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
             probs = batch_mul(coeffs, P_n)
             prob = gs.sum(probs, axis=0)
