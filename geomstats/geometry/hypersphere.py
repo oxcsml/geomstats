@@ -16,16 +16,12 @@ from geomstats.geometry.base import EmbeddedManifold
 from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 from geomstats.geometry.special_orthogonal import SpecialOrthogonal
-
 import jax
-def batch_mul(a, b):
-    return jax.vmap(lambda a, b: a * b)(a, b)
-
 
 def gegenbauer_polynomials(alpha: float, l_max: int, x):
     """https://en.wikipedia.org/wiki/Gegenbauer_polynomials"""
     shape = x.shape if len(x.shape) > 0 else (1,)
-    p = gs.zeros((l_max + 1, shape[0]))
+    p = gs.zeros((max(l_max + 1, 2), shape[0]))
     C_0 = gs.ones_like(x)
     C_1 = 2 * alpha * x
     p = p.at[0].set(C_0)
@@ -38,10 +34,10 @@ def gegenbauer_polynomials(alpha: float, l_max: int, x):
         p_val = p_val.at[n].set(C_n)
         return p_val
 
-    if l_max > 1:
+    if l_max >= 2:
         p = jax.lax.fori_loop(lower=2, upper=l_max+1, body_fun=body_fun, init_val=p)
 
-    return p
+    return p[:l_max+1]
 
 
 class _Hypersphere(EmbeddedManifold):
@@ -556,43 +552,21 @@ class _Hypersphere(EmbeddedManifold):
         if d == 1:
             n = gs.expand_dims(gs.arange(- n_max, n_max + 1), axis=-1)
             t = gs.expand_dims(t, axis=0)
-            sigma_squared = 2 * t  # NOTE: factor 2 is needed empirically to match kernel
+            sigma_squared = t  # NOTE: factor 2 is needed empirically to match kernel?
             cos_theta = gs.sum(x0 * x, axis=-1)
             theta = gs.arccos(cos_theta)
             coeffs = gs.exp(-gs.power(theta + 2 * math.pi * n, 2) / 2 / sigma_squared)
             prob = gs.sum(coeffs, axis=0)
             prob = prob / gs.sqrt(2 * math.pi * sigma_squared)
         else:
-        # if d == 2:
-        #     # log p_t(x, y) = \sum^\infty_{n=0} e^{-n(n+1)t} \frac{2n + 1}{4 \pi} P_n(x^\top y)
-        #     coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + 1) / (4 * gs.pi)
-        #     #  When m is zero and l integer, associated legendre polynomials are identical to the Legendre polynomials.
-        #     # Would likely be faster to implement directly legendre polynomials: (n+1)P_{n+1}(x)=(2n+1)xP_{n}(x)-nP_{n-1}(x)
-        #     # see https://issueexplorer.com/issue/google/jax/2991
-        #     P_n = lpmn_values(n_max, n_max, cos_theta, is_normalized=False)[0, :, :]
             n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
             t = gs.expand_dims(t, axis=0)
             coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
             inner_prod = gs.sum(x0 * x, axis=-1)
             cos_theta = gs.clip(inner_prod, -1.0, 1.0)
             P_n = gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
-            probs = batch_mul(coeffs, P_n)
-            prob = gs.sum(probs, axis=0)
+            prob = gs.sum(coeffs * P_n, axis=0)
         return gs.log(prob)
-
-    # def grad_heat_kernel(self, x0, x, t, n_max=5):
-    #     d = self.dim
-    #     if d == 1:
-    #         raise NotImplementedError()
-    #     else:
-    #         n = gs.expand_dims(gs.arange(0, n_max + 1), axis=-1)
-    #         t = gs.expand_dims(t, axis=0)
-    #         coeffs = gs.exp(- n * (n + 1) * t) * (2 * n + d - 1) / (d - 1) / self.metric.volume
-    #         cos_theta = gs.sum(x0 * x, axis=-1)
-    #         P_prime_n = derivative_gegenbauer_polynomials(alpha=(self.dim-1)/2, l_max=n_max, x=cos_theta)
-    #         probs = batch_mul(coeffs, P_prime_n)
-    #         prob = gs.sum(probs, axis=0)
-    #     return prob
 
     def div_free_generators(self, x):
         """

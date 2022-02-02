@@ -350,7 +350,6 @@ class EmbeddedManifold(Manifold, abc.ABC):
         return gs.where(cond, approx, exact)
 
     def grad_log_heat_kernel_exp(self, x0, x, t):
-        t = t / 2  # NOTE: to match random walk
         return self.metric.log(x0, x) / gs.expand_dims(t, -1)
 
     def grad_marginal_log_prob(self, x0, x, t, thresh, n_max):
