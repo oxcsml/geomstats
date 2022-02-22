@@ -137,20 +137,26 @@ class _Hypersphere(EmbeddedManifold):
         point_extrinsic : array_like, shape=[..., dim + 1]
             Point on the sphere, in extrinsic coordinates in Euclidean space.
         """
-        if self.dim != 2:
+        if self.dim == 1:
+            theta = point_spherical[..., 0]
+            point_extrinsic = gs.stack(
+                [gs.cos(theta), gs.sin(theta)],
+                axis=-1,
+            )
+        elif self.dim == 2:
+            theta = point_spherical[..., 0]
+            phi = point_spherical[..., 1]
+
+            point_extrinsic = gs.stack(
+                [gs.sin(theta) * gs.cos(phi), gs.sin(theta) * gs.sin(phi), gs.cos(theta)],
+                axis=-1,
+            )
+        else:
             raise NotImplementedError(
                 "The conversion from spherical coordinates"
                 " to extrinsic coordinates is implemented"
                 " only in dimension 2."
             )
-
-        theta = point_spherical[..., 0]
-        phi = point_spherical[..., 1]
-
-        point_extrinsic = gs.stack(
-            [gs.sin(theta) * gs.cos(phi), gs.sin(theta) * gs.sin(phi), gs.cos(theta)],
-            axis=-1,
-        )
 
         if not gs.all(self.belongs(point_extrinsic)):
             raise ValueError("Points do not belong to the manifold.")

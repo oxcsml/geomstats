@@ -7,6 +7,7 @@ import geomstats.errors
 import geomstats.vectorization
 from geomstats.geometry.manifold import Manifold
 from geomstats.geometry.product_riemannian_metric import ProductRiemannianMetric
+from geomstats.geometry.hypersphere import Hypersphere
 
 
 class ProductManifold(Manifold):
@@ -46,14 +47,14 @@ class ProductManifold(Manifold):
             default_point_type, "default_point_type", ["vector", "matrix"]
         )
 
-        self.dims = [manifold.dim for manifold in manifolds]
+        self.dims = gs.array([manifold.dim for manifold in manifolds])
         if metrics is None:
             metrics = [manifold.metric for manifold in manifolds]
         metric = ProductRiemannianMetric(
             metrics, default_point_type=default_point_type, n_jobs=n_jobs
         )
         super(ProductManifold, self).__init__(
-            dim=sum(self.dims),
+            dim=int(sum(self.dims)),
             metric=metric,
             default_point_type=default_point_type,
             **kwargs
@@ -311,3 +312,114 @@ class ProductManifold(Manifold):
 
         is_tangent = gs.all(is_tangent, axis=-1)
         return is_tangent
+
+
+# class Torus(ProductManifold):
+#     def __init__(
+#         self, dim, **kwargs
+#     ):
+#         manifolds = [Hypersphere(1) for i in range(dim)]
+#         self.manifold = manifolds[0]
+#         super(Torus, self).__init__(
+#             manifolds,
+#             **kwargs
+#         )
+
+import jax 
+class ProductSameManifold(ProductManifold):
+    def __init__(
+        self, manifold, mul, **kwargs
+    ):
+        manifolds = [manifold for i in range(mul)]
+        self.manifold = manifold
+        self.mul = mul
+        super(ProductSameManifold, self).__init__(
+            manifolds,
+            **kwargs
+        )
+
+    def _iterate_over_manifolds(self, func, kwargs, in_axes=-2, out_axes=-2):
+        method = getattr(self.manifold, func)
+        in_axes = []
+        args_list = []
+        for key, value in kwargs.items():
+            if hasattr(value, 'reshape'):
+                #value : shape=[..., mul*dim] -> shape=[..., mul, dim]
+                value = value.reshape((*value.shape[:-1], self.mul, -1))
+                in_axes.append(-2)
+            else:
+                in_axes.append(None)
+            args_list.append(value)
+        # out = jax.vmap(method, in_axes=in_axes, out_axes=out_axes)(**args)
+        #NOTE: Annoyingly cannot pass named arguments with in_axes! https://github.com/google/jax/issues/7465
+        out = jax.vmap(method, in_axes=in_axes, out_axes=out_axes)(*args_list)
+        out = out.reshape((*out.shape[:out_axes], -1))
+        #value : shape=[..., mul, dim] -> shape=[..., mul*dim]
+        return out
+
+    def belongs(self, point, atol=gs.atol):
+        belongs = self._iterate_over_manifolds(
+            "belongs", {"point": point, "atol": atol},
+            out_axes=-1,
+        )
+        belongs = gs.all(belongs, axis=-1)
+        return belongs
+
+    def random_uniform(self, state, n_samples=1):
+        new_state = jax.random.split(state, num=self.mul+1)
+        next_rng = new_state[:-1].reshape((-1))
+        samples = self._iterate_over_manifolds(
+            "random_uniform", {"state": next_rng, "n_samples": n_samples},
+        )
+        return samples
+
+    def projection(self, point):
+        projected_point = self._iterate_over_manifolds(
+            "projection", {"point": point},
+        )
+        return projected_point
+
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        size=(n_samples, self.mul*self.manifold.embedding_space.dim)
+        state, ambiant_noise = gs.random.normal(state=state, size=size)
+        return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
+
+    def to_tangent(self, vector, base_point):
+        tangent_vec = self._iterate_over_manifolds(
+            "to_tangent", {"vector": vector, "base_point": base_point},
+        )
+        return tangent_vec
+
+    def is_tangent(self, vector, base_point, atol=gs.atol):
+        is_tangent = self._iterate_over_manifolds(
+            "is_tangent",
+            {"vector": vector, "base_point": base_point, "atol": atol},
+            out_axes=-1,
+        )
+        is_tangent = gs.all(is_tangent, axis=-1)
+        return is_tangent
+
+
+class Torus(ProductSameManifold):
+    def __init__(
+        self, dim, **kwargs
+    ):
+        super(Torus, self).__init__(
+            Hypersphere(1),
+            dim,
+            **kwargs
+        )
+
+
+if __name__ == "__main__":
+    torus = Torus(3)
+    rng = jax.random.PRNGKey(0)
+    rng, next_rng = jax.random.split(rng)
+    K = 8
+    x = torus.random_uniform(next_rng, K)
+    print(torus.belongs(x).all())
+    x = torus.projection(x)
+    print(torus.belongs(x).all())
+    rng, next_rng = jax.random.split(rng)
+    _, v = torus.random_normal_tangent(next_rng, x, n_samples=1)
+    print(torus.is_tangent(v, x).all())
