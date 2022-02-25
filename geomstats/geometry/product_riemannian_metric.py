@@ -297,3 +297,71 @@ class ProductRiemannianMetric(RiemannianMetric):
             axis=1,
         )
         return logs
+
+
+import jax
+
+
+class ProductSameRiemannianMetric(RiemannianMetric):
+    """Jax based vmapped product metircs over the same manifold"""
+
+    def __init__(self, metric, mul, default_point_type="vector", **kwargs):
+        self.metric = metric
+        self.mul = mul
+        self.dim = self.mul * self.metric.dim
+
+        super(ProductSameRiemannianMetric, self).__init__(
+            dim=self.dim,
+            signature=(metric.signature[0] * self.mul, metric.signature[1] * self.mul),
+            default_point_type=default_point_type,
+        )
+
+    def _iterate_over_metrics(self, func, kwargs, in_axes=-2, out_axes=-2):
+        method = getattr(self.metric, func)
+        in_axes = []
+        args_list = []
+        for key, value in kwargs.items():
+            if hasattr(value, "reshape"):
+                # value : shape=[..., mul*dim] -> shape=[..., mul, dim]
+                value = value.reshape((*value.shape[:-1], self.mul, -1))
+                in_axes.append(-2)
+            else:
+                in_axes.append(None)
+            args_list.append(value)
+        # out = jax.vmap(method, in_axes=in_axes, out_axes=out_axes)(**args)
+        # NOTE: Annoyingly cannot pass named arguments with in_axes! https://github.com/google/jax/issues/7465
+        out = jax.vmap(method, in_axes=in_axes, out_axes=out_axes)(*args_list)
+        out = out.reshape((*out.shape[:out_axes], -1))
+        # value : shape=[..., mul, dim] -> shape=[..., mul*dim]
+        return out
+
+    def exp(self, tangent_vec, base_point):
+        return self._iterate_over_metrics(
+            "exp",
+            {
+                "tangent_vec": tangent_vec,
+                "base_point": base_point,
+            },
+        )
+
+    def log(self, point, base_point=None, point_type=None):
+        return self._iterate_over_metrics(
+            "log",
+            {
+                "point": point,
+                "base_point": base_point,
+                # "point_type": point_type,
+            },
+        )
+
+    def squared_norm(self, vector, base_point=None):
+        return jnp.sum(
+            self._iterate_over_metrics(
+                "squared_norm",
+                {
+                    "vector": vector,
+                    "base_point": base_point,
+                },
+            ),
+            axis=-1,
+        )
