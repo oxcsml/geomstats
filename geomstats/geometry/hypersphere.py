@@ -595,7 +595,7 @@ class _Hypersphere(EmbeddedManifold):
         f_ij=x^i partial_j - x^j partial_i for 0 <= i < j <= dim
         Returns
         -------
-        generators : torch.tensor
+        generators :
             generators induced by isometry group lie algebra basis
             shape=[batch_size, dim+1, dim(SO(dim+1))].
         """
@@ -620,7 +620,7 @@ class _Hypersphere(EmbeddedManifold):
         f_i(x) = e_i - <x, e_i> x  for 1 <= i <= dim + 1
         Returns
         -------
-        generators : torch.tensor
+        generators :
             gradient of laplacian eigenfunctions with eigenvalue=1
             shape=[batch_size, dim+1, dim+1].
         """
@@ -649,6 +649,25 @@ class _Hypersphere(EmbeddedManifold):
         y_norm_sq = gs.sum(gs.power(y, 2), -1)
         out = (self.dim) * (math.log(2) - gs.log1p(self.c * y_norm_sq))
         return out
+
+    @property
+    def log_volume(self):
+        return self.metric.log_volume
+
+    def logdetexp(self, x, y, is_vector=False):
+        return self.metric.logdetexp(x, y, is_vector)
+
+    def hat(self, point):
+        return point
+
+    def vee(self, point):
+        return point
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        return self.metric.exp(tangent_vec, base_point, **kwargs)
+
+    def log(self, point, base_point, **kwargs):
+        return self.metric.log(point, base_point, **kwargs)
 
 
 class HypersphereMetric(RiemannianMetric):
