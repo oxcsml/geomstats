@@ -1,5 +1,6 @@
 """Jax based linear algebra backend."""
 
+from jax._src import abstract_arrays
 import jax.numpy as np
 import numpy as _np
 import functools
@@ -34,11 +35,11 @@ def expm(x):
 
 
 logm_prim = core.Primitive('logm')
-logm_prim.def_impl(_np.vectorize(lambda x: scipy.linalg.logm(x.copy()), signature='(m,n)->(m,n)'))  # NOTE: needed the x.copy(), is that an issue?
+logm_prim.def_impl(_np.vectorize(scipy.linalg.logm, signature='(m,n)->(m,n)'))
+logm_prim.def_abstract_eval(lambda x: abstract_arrays.ShapedArray(x.shape, x.dtype))
 
 
 def logm(x):
-    x = x.copy() 
     return logm_prim.bind(x)
 
 

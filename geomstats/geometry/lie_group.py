@@ -313,6 +313,213 @@ class MatrixLieGroup(Manifold, abc.ABC):
         lie_algebra_vec = logm(cls.compose(cls.inverse(base_point), point))
         return cls.compose(base_point, lie_algebra_vec)
 
+    def get_identity(self, point_type=None):
+        """Get the identity of the group.
+
+        Parameters
+        ----------
+        point_type : str, {'matrix', 'vector'}
+            Point type.
+            Optional, default: None.
+
+        Returns
+        -------
+        identity : array-like, shape={[dim], [n, n]}
+            Identity of the Lie group.
+        """
+        return self.identity
+
+    def exp_from_identity(self, tangent_vec):
+        """Compute the group exponential of tangent vector from the identity.
+
+        Parameters
+        ----------
+        tangent_vec : array-like, shape=[..., {dim, [n, n]}]
+            Tangent vector at base point.
+
+        Returns
+        -------
+        point : array-like, shape=[..., {dim, [n, n]}]
+            Group exponential.
+        """
+        raise NotImplementedError(
+            "The group exponential from the identity is not implemented."
+        )
+
+    def exp_not_from_identity(self, tangent_vec, base_point):
+        """Calculate the group exponential at base_point.
+
+        Parameters
+        ----------
+        tangent_vec : array-like, shape=[..., {dim, [n, n]}]
+            Tangent vector at base point.
+        base_point : array-like, shape=[..., {dim, [n, n]}]
+            Base point.
+
+        Returns
+        -------
+        exp : array-like, shape=[..., {dim, [n, n]}]
+            Group exponential.
+        """
+        if self.default_point_type == "vector":
+            tangent_translation = self.tangent_translation_map(
+                point=base_point, left_or_right="left", inverse=True
+            )
+
+            tangent_vec_at_id = tangent_translation(tangent_vec)
+            exp_from_identity = self.exp_from_identity(tangent_vec=tangent_vec_at_id)
+            exp = self.compose(base_point, exp_from_identity)
+            exp = self.regularize(exp)
+            return exp
+
+        lie_vec = self.compose(self.inverse(base_point), tangent_vec)
+        # NOTE: wo this Euler-Maruyama diverges outside of the manifold
+        lie_vec = self.to_tangent(lie_vec)
+        return self.compose(base_point, self.exp_from_identity(lie_vec))
+
+    def exp(self, tangent_vec, base_point=None):
+        """Compute the group exponential at `base_point` of `tangent_vec`.
+
+        Parameters
+        ----------
+        tangent_vec : array-like, shape=[..., {dim, [n, n]}]
+            Tangent vector at base point.
+        base_point : array-like, shape=[..., {dim, [n, n]}]
+            Base point.
+            Optional, default: self.identity
+
+        Returns
+        -------
+        result : array-like, shape=[..., {dim, [n, n]}]
+            Group exponential.
+        """
+        identity = self.get_identity()
+
+        if base_point is None:
+            base_point = identity
+        base_point = self.regularize(base_point)
+
+        # if gs.allclose(base_point, identity):
+            # result = self.exp_from_identity(tangent_vec)
+        # else:
+        result = self.exp_not_from_identity(tangent_vec, base_point)
+        return result
+
+    def log_from_identity(self, point):
+        """Compute the group logarithm of `point` from the identity.
+
+        Parameters
+        ----------
+        point : array-like, shape=[..., {dim, [n, n]}]
+            Point.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., {dim, [n, n]}]
+            Group logarithm.
+        """
+        raise NotImplementedError(
+            "The group logarithm from the identity is not implemented."
+        )
+
+    def log_not_from_identity(self, point, base_point):
+        """Compute the group logarithm of `point` from `base_point`.
+
+        Parameters
+        ----------
+        point : array-like, shape=[..., {dim, [n, n]}]
+            Point.
+        base_point : array-like, shape=[..., {dim, [n, n]}]
+            Base point.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., {dim, [n, n]}]
+            Group logarithm.
+        """
+        if self.default_point_type == "vector":
+            tangent_translation = self.tangent_translation_map(
+                point=base_point, left_or_right="left"
+            )
+            point_near_id = self.compose(self.inverse(base_point), point)
+            log_from_id = self.log_from_identity(point=point_near_id)
+            log = tangent_translation(log_from_id)
+            return log
+
+        lie_point = self.compose(self.inverse(base_point), point)
+        return self.compose(base_point, self.log_from_identity(lie_point))
+
+    def log(self, point, base_point=None):
+        """Compute the group logarithm of `point` relative to `base_point`.
+
+        Parameters
+        ----------
+        point : array-like, shape=[..., {dim, [n, n]}]
+            Point.
+        base_point : array-like, shape=[..., {dim, [n, n]}]
+            Base point.
+            Optional, defaults to identity if None.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., {dim, [n, n]}]
+            Group logarithm.
+        """
+        # TODO (ninamiolane): Build a standalone decorator that *only*
+        # deals with point_type None and base_point None
+        identity = self.get_identity(point_type=self.default_point_type)
+        if base_point is None:
+            base_point = identity
+
+        point = self.regularize(point)
+        base_point = self.regularize(base_point)
+
+        # if gs.allclose(base_point, identity):
+            # result = self.log_from_identity(point)
+        # else:
+        result = self.log_not_from_identity(point, base_point)
+        return result
+
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        
+        state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.dim))
+        samples = self.lie_algebra.matrix_representation(ambiant_noise)
+        samples = self.compose(base_point, samples)
+        return state, samples
+    
+    def hat(self, point):
+        """
+        Map a point in R^dim to the tangent space at the identity, i.e.
+        to the Lie Algebra. Inverse of vee.
+        :param v: Lie algebra in vector rep of shape (..., dim)
+        :return: Lie algebar in matrix rep of shape (..., n, n)
+        """
+        return self.lie_algebra.matrix_representation(point)
+
+    def vee(self, point):
+        """
+        Map Lie algebra in ordinary (n, n) matrix rep to vector in R^dim.
+        Inverse of hat
+        :param v: Lie algebar in matrix rep of shape (..., n, n)
+        :return: Lie algebra in vector rep of shape (..., dim)
+        """
+        return self.lie_algebra.basis_representation(point)
+
 
 class LieGroup(Manifold, abc.ABC):
     """Class for Lie groups.
