@@ -126,7 +126,7 @@ class _Hypersphere(EmbeddedManifold):
 
         Convert from the spherical coordinates in the hypersphere
         to the extrinsic coordinates in Euclidean space.
-        Only implemented in dimension 2.
+        Only implemented in dimension 1, 2.
 
         Parameters
         ----------
@@ -160,7 +160,7 @@ class _Hypersphere(EmbeddedManifold):
             raise NotImplementedError(
                 "The conversion from spherical coordinates"
                 " to extrinsic coordinates is implemented"
-                " only in dimension 2."
+                " only in dimension 1, 2."
             )
 
         if not gs.all(self.belongs(point_extrinsic)):
@@ -197,24 +197,37 @@ class _Hypersphere(EmbeddedManifold):
                 " only in dimension 2."
             )
 
-        axes = (2, 0, 1) if base_point_spherical.ndim == 2 else (0, 1)
-        theta = base_point_spherical[..., 0]
-        phi = base_point_spherical[..., 1]
+        if self.dim == 1:
+            theta = point_spherical[..., 0]
+            point_extrinsic = gs.stack(
+                [gs.cos(theta), gs.sin(theta)],
+                axis=-1,
+            )
+        elif self.dim == 2:
+            axes = (2, 0, 1) if base_point_spherical.ndim == 2 else (0, 1)
+            theta = base_point_spherical[..., 0]
+            phi = base_point_spherical[..., 1]
 
-        zeros = gs.zeros_like(theta)
+            zeros = gs.zeros_like(theta)
 
-        jac = gs.array(
-            [
-                [gs.cos(theta) * gs.cos(phi), -gs.sin(theta) * gs.sin(phi)],
-                [gs.cos(theta) * gs.sin(phi), gs.sin(theta) * gs.cos(phi)],
-                [-gs.sin(theta), zeros],
-            ]
-        )
-        jac = gs.transpose(jac, axes)
+            jac = gs.array(
+                [
+                    [gs.cos(theta) * gs.cos(phi), -gs.sin(theta) * gs.sin(phi)],
+                    [gs.cos(theta) * gs.sin(phi), gs.sin(theta) * gs.cos(phi)],
+                    [-gs.sin(theta), zeros],
+                ]
+            )
+            jac = gs.transpose(jac, axes)
 
-        tangent_vec_extrinsic = gs.einsum(
-            "...ij,...j->...i", jac, tangent_vec_spherical
-        )
+            tangent_vec_extrinsic = gs.einsum(
+                "...ij,...j->...i", jac, tangent_vec_spherical
+            )
+        else:
+            raise NotImplementedError(
+                "The conversion from spherical coordinates"
+                " to extrinsic coordinates is implemented"
+                " only in dimension 1, 2."
+            )
 
         return tangent_vec_extrinsic
 
@@ -599,9 +612,7 @@ class _Hypersphere(EmbeddedManifold):
             generators induced by isometry group lie algebra basis
             shape=[batch_size, dim+1, dim(SO(dim+1))].
         """
-        if self.dim != 2:
-            raise NotImplementedError()
-        else:
+        if dim == 2:
             zeros = gs.zeros((*x.shape[:-1], 1))
             f_01 = gs.expand_dims(
                 gs.concatenate([-x[..., [1]], x[..., [0]], zeros], axis=-1), axis=-1
@@ -614,6 +625,8 @@ class _Hypersphere(EmbeddedManifold):
             )
             generators = gs.concatenate([f_01, f_02, f_12], axis=-1)
             return generators
+        else:
+            raise NotImplementedError()
 
     def eigen_generators(self, x):
         """
