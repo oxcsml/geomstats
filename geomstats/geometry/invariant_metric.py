@@ -344,9 +344,7 @@ class _InvariantMetricMatrix(RiemannianMetric):
             Tangent vector at `base_point`.
         """
         if base_point is None:
-            return self.curvature_at_identity(
-                tangent_vec_a, tangent_vec_b, tangent_vec_c
-            )
+            return self.curvature_at_identity(tangent_vec_a, tangent_vec_b, tangent_vec_c)
 
         translation_map = self.group.tangent_translation_map(
             base_point, left_or_right=self.left_or_right, inverse=True
