@@ -328,13 +328,13 @@ class ProductManifold(Manifold):
 import jax
 import jax.numpy as jnp
 from geomstats.geometry.product_riemannian_metric import ProductSameRiemannianMetric
+from jax.scipy.linalg import block_diag
 
 
 class ProductSameManifold(Manifold):
     def __init__(
         self, manifold, mul, metric=None, default_point_type="vector", **kwargs
     ):
-        manifolds = [manifold for i in range(mul)]
         self.manifold = manifold
         self.mul = mul
         self.dim = self.mul * self.manifold.dim
@@ -390,11 +390,12 @@ class ProductSameManifold(Manifold):
         return tangent_vec
 
     def random_uniform(self, state, n_samples=1):
-        new_state = jax.random.split(state, num=self.mul + 1)
-        next_rng = new_state[:-1].reshape((-1))
+        if self.mul > 1:
+            new_state = jax.random.split(state, num=self.mul)
+            state = new_state.reshape((-1))
         samples = self._iterate_over_manifolds(
             "random_uniform",
-            {"state": next_rng, "n_samples": n_samples},
+            {"state": state, "n_samples": n_samples},
         )
         return samples
 
@@ -406,12 +407,13 @@ class ProductSameManifold(Manifold):
         return samples
 
     def random_walk(self, rng, x, t):
-        new_state = jax.random.split(rng, num=self.mul + 1)
-        next_rng = new_state[:-1].reshape((-1))
+        if self.mul > 1:
+            new_state = jax.random.split(rng, num=self.mul)
+            rng = new_state.reshape((-1))
         if isinstance(x, jax.numpy.ndarray):
-            t = t * jnp.ones(self.mul)
+            t = t[:, None] * jnp.ones(self.mul)[None, :]
         walks = self._iterate_over_manifolds(
-            "random_walk", {"rng": next_rng, "x": x, "t": t}
+            "random_walk", {"rng": rng, "x": x, "t": t}
         )
         return walks
 
@@ -436,3 +438,43 @@ class ProductSameManifold(Manifold):
         )
         is_tangent = gs.all(is_tangent, axis=-1)
         return is_tangent
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        return self._iterate_over_manifolds(
+            "exp",
+            {"tangent_vec": tangent_vec, "base_point": base_point},
+        )
+
+    def log(self, point, base_point, **kwargs):
+        return self._iterate_over_manifolds(
+            "log",
+            {"point": point, "base_point": base_point},
+        )
+
+    def div_free_generators(self, x):
+        generators = self._iterate_over_manifolds("div_free_generators", {"x": x})
+        # return generators
+        def block_diag_generators(generators):
+            gens = jnp.split(generators, self.mul, axis=1)
+            return block_diag(*gens)
+
+        block_diag_generators = jax.vmap(block_diag_generators, in_axes=0, out_axes=0)
+        return block_diag_generators(generators)
+
+    @property
+    def log_volume(self):
+        # TODO: Double check
+        return self.mul * self.manifold.log_volume
+
+    # TODO: I CBA to write product groups rn, this is a hacky af way to get the isom_group.dim thing to work for moser flows
+
+    @property
+    def isom_group(self):
+        class dotdict(dict):
+            """dot.notation access to dictionary attributes"""
+
+            __getattr__ = dict.get
+            __setattr__ = dict.__setitem__
+            __delattr__ = dict.__delitem__
+
+        return dotdict(dim=self.manifold.isom_group.dim * self.mul)

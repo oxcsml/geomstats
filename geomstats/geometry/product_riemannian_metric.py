@@ -310,7 +310,7 @@ class ProductSameRiemannianMetric(RiemannianMetric):
         self.mul = mul
         self.dim = self.mul * self.metric.dim
 
-        super(ProductSameRiemannianMetric, self).__init__(
+        super().__init__(
             dim=self.dim,
             signature=(metric.signature[0] * self.mul, metric.signature[1] * self.mul),
             default_point_type=default_point_type,
@@ -355,13 +355,14 @@ class ProductSameRiemannianMetric(RiemannianMetric):
         )
 
     def squared_norm(self, vector, base_point=None):
-        return jnp.sum(
+        return gs.sum(
             self._iterate_over_metrics(
                 "squared_norm",
                 {
                     "vector": vector,
                     "base_point": base_point,
                 },
+                out_axes=-1,
             ),
             axis=-1,
         )

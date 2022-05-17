@@ -60,7 +60,7 @@ class _Hypersphere(EmbeddedManifold):
         super(_Hypersphere, self).__init__(
             dim=dim,
             embedding_space=Euclidean(dim + 1),
-            submersion=lambda x: gs.sum(x ** 2, axis=-1),
+            submersion=lambda x: gs.sum(x**2, axis=-1),
             value=1.0,
             tangent_submersion=lambda v, x: 2 * gs.sum(x * v, axis=-1),
         )
@@ -114,7 +114,7 @@ class _Hypersphere(EmbeddedManifold):
             Tangent vector in the tangent space of the hypersphere
             at the base point.
         """
-        sq_norm = gs.sum(base_point ** 2, axis=-1)
+        sq_norm = gs.sum(base_point**2, axis=-1)
         inner_prod = self.embedding_metric.inner_product(base_point, vector)
         coef = inner_prod / sq_norm
         tangent_vec = vector - gs.einsum("...,...j->...j", coef, base_point)
@@ -248,7 +248,7 @@ class _Hypersphere(EmbeddedManifold):
             Point on the hypersphere, in extrinsic coordinates in
             Euclidean space.
         """
-        sq_coord_0 = 1.0 - gs.sum(point_intrinsic ** 2, axis=-1)
+        sq_coord_0 = 1.0 - gs.sum(point_intrinsic**2, axis=-1)
         if gs.any(gs.less(sq_coord_0, 0.0)):
             raise ValueError("Square-root of a negative number.")
         coord_0 = gs.sqrt(sq_coord_0)
@@ -403,15 +403,15 @@ class _Hypersphere(EmbeddedManifold):
                 scalar + (1.0 - scalar) * gs.exp(gs.array(-2.0 * kappa))
             )
             coord_x = gs.to_ndarray(coord_x, to_ndim=2, axis=1)
-            coord_yz = gs.sqrt(1.0 - coord_x ** 2) * unit_vector
+            coord_yz = gs.sqrt(1.0 - coord_x**2) * unit_vector
             sample = gs.hstack((coord_x, coord_yz))
 
         else:
             # rejection sampling in the general case
-            sqrt = gs.sqrt(4 * kappa ** 2.0 + dim ** 2)
+            sqrt = gs.sqrt(4 * kappa**2.0 + dim**2)
             envelop_param = (-2 * kappa + sqrt) / dim
             node = (1.0 - envelop_param) / (1.0 + envelop_param)
-            correction = kappa * node + dim * gs.log(1.0 - node ** 2)
+            correction = kappa * node + dim * gs.log(1.0 - node**2)
 
             n_accepted, n_iter = 0, 0
             result = []
@@ -436,7 +436,7 @@ class _Hypersphere(EmbeddedManifold):
             coord_x = gs.concatenate(result)
             coord_rest = _Hypersphere(dim - 1).random_uniform(n_accepted)
             coord_rest = gs.einsum(
-                "...,...i->...i", gs.sqrt(1 - coord_x ** 2), coord_rest
+                "...,...i->...i", gs.sqrt(1 - coord_x**2), coord_rest
             )
             sample = gs.concatenate([coord_x[..., None], coord_rest], axis=1)
 
@@ -508,12 +508,12 @@ class _Hypersphere(EmbeddedManifold):
 
         def threshold(random_v):
             """Compute the acceptance threshold."""
-            squared_norm = gs.sum(random_v ** 2, axis=-1)
+            squared_norm = gs.sum(random_v**2, axis=-1)
             sinc = utils.taylor_exp_even_func(squared_norm, utils.sinc_close_0) ** (
                 dim - 1
             )
             threshold_val = sinc * gs.exp(squared_norm * (dim - 1) / 2 / gs.pi)
-            return threshold_val, squared_norm ** 0.5
+            return threshold_val, squared_norm**0.5
 
         while (n_accepted < n_samples) and (n_iter < max_iter):
             envelope = gs.random.multivariate_normal(
@@ -561,6 +561,8 @@ class _Hypersphere(EmbeddedManifold):
             rng, z = self.random_normal_tangent(
                 state=rng, base_point=x, n_samples=x.shape[0]
             )
+            if len(t.shape) == len(x.shape) - 1:
+                t = t[..., None]
             tangent_vector = gs.sqrt(t) * z
             samples = self.metric.exp(tangent_vec=tangent_vector, base_point=x)
             return samples
@@ -612,7 +614,10 @@ class _Hypersphere(EmbeddedManifold):
             generators induced by isometry group lie algebra basis
             shape=[batch_size, dim+1, dim(SO(dim+1))].
         """
-        if dim == 2:
+        if self.dim == 1:
+            rot_mat = gs.array([[0, -1], [1, 0]])
+            return rot_mat @ x[..., None]
+        elif self.dim == 2:
             zeros = gs.zeros((*x.shape[:-1], 1))
             f_01 = gs.expand_dims(
                 gs.concatenate([-x[..., [1]], x[..., [0]], zeros], axis=-1), axis=-1
@@ -988,19 +993,19 @@ class HypersphereMetric(RiemannianMetric):
     @property
     def volume(self):
         half_dim = (self.dim + 1) / 2
-        return 2 * gs.pi ** half_dim / math.gamma(half_dim)
+        return 2 * gs.pi**half_dim / math.gamma(half_dim)
 
     def _normalization_factor_odd_dim(self, variances):
         """Compute the normalization factor - odd dimension."""
         dim = self.dim
         half_dim = int((dim + 1) / 2)
-        area = 2 * gs.pi ** half_dim / math.factorial(half_dim - 1)
+        area = 2 * gs.pi**half_dim / math.factorial(half_dim - 1)
         comb = gs.comb(dim - 1, half_dim - 1)
 
         erf_arg = gs.sqrt(variances / 2) * gs.pi
         first_term = (
             area
-            / (2 ** dim - 1)
+            / (2**dim - 1)
             * comb
             * gs.sqrt(gs.pi / (2 * variances))
             * gs.erf(erf_arg)
@@ -1019,7 +1024,7 @@ class HypersphereMetric(RiemannianMetric):
             sum_term = gs.sum(gs.stack([summand(k)] for k in range(half_dim - 2)))
         else:
             sum_term = summand(0)
-        coef = area / 2 / erf_arg * gs.pi ** 0.5 * (-1.0) ** (half_dim - 1)
+        coef = area / 2 / erf_arg * gs.pi**0.5 * (-1.0) ** (half_dim - 1)
 
         return first_term + coef / 2 ** (dim - 2) * sum_term
 
@@ -1027,7 +1032,7 @@ class HypersphereMetric(RiemannianMetric):
         """Compute the normalization factor - even dimension."""
         dim = self.dim
         half_dim = (dim + 1) / 2
-        area = 2 * gs.pi ** half_dim / math.gamma(half_dim)
+        area = 2 * gs.pi**half_dim / math.gamma(half_dim)
 
         def summand(k):
             exp_arg = -((dim - 1 - 2 * k) ** 2) / 2 / variances
