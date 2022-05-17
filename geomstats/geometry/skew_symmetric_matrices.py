@@ -46,6 +46,7 @@ class SkewSymmetricMatrices(MatrixLieAlgebra):
                         )
                     )
             self.basis = gs.stack(basis)
+        self.basis_normed = self.basis / gs.sqrt(n - 1)
 
     def belongs(self, mat, atol=gs.atol):
         """Evaluate if mat is a skew-symmetric matrix.
@@ -64,9 +65,9 @@ class SkewSymmetricMatrices(MatrixLieAlgebra):
             Boolean evaluating if matrix is skew symmetric.
         """
         has_right_shape = self.ambient_space.belongs(mat)
-        if gs.all(has_right_shape):
-            return Matrices.is_skew_symmetric(mat=mat, atol=atol)
-        return has_right_shape
+        # if gs.all(has_right_shape):
+        return Matrices.is_skew_symmetric(mat=mat, atol=atol)
+        # return has_right_shape
 
     def random_point(self, n_samples=1, bound=1.0):
         """Sample from a uniform distribution in a cube.

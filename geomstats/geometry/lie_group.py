@@ -400,7 +400,7 @@ class MatrixLieGroup(Manifold, abc.ABC):
         base_point = self.regularize(base_point)
 
         # if gs.allclose(base_point, identity):
-            # result = self.exp_from_identity(tangent_vec)
+        # result = self.exp_from_identity(tangent_vec)
         # else:
         result = self.exp_not_from_identity(tangent_vec, base_point)
         return result
@@ -475,7 +475,7 @@ class MatrixLieGroup(Manifold, abc.ABC):
         base_point = self.regularize(base_point)
 
         # if gs.allclose(base_point, identity):
-            # result = self.log_from_identity(point)
+        # result = self.log_from_identity(point)
         # else:
         result = self.log_not_from_identity(point, base_point)
         return result
@@ -496,12 +496,12 @@ class MatrixLieGroup(Manifold, abc.ABC):
         tangent_vec : array-like, shape=[..., dim]
             Tangent vector at base point.
         """
-        
+
         state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.dim))
-        samples = self.lie_algebra.matrix_representation(ambiant_noise)
+        samples = self.lie_algebra.matrix_representation(ambiant_noise, normed=True)
         samples = self.compose(base_point, samples)
         return state, samples
-    
+
     def hat(self, point):
         """
         Map a point in R^dim to the tangent space at the identity, i.e.

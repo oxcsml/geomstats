@@ -104,7 +104,7 @@ class MatrixLieAlgebra(VectorSpace, abc.ABC):
         """
         raise NotImplementedError("basis_representation not implemented.")
 
-    def matrix_representation(self, basis_representation):
+    def matrix_representation(self, basis_representation, normed=False):
         """Compute the matrix representation for the given basis coefficients.
 
         Sums the basis elements according to the coefficents given in
@@ -122,5 +122,5 @@ class MatrixLieAlgebra(VectorSpace, abc.ABC):
         """
         if self.basis is None:
             raise NotImplementedError("basis not implemented")
-
-        return gs.einsum("...i,ijk ->...jk", basis_representation, self.basis)
+        basis = self.basis if not normed else self.basis_normed
+        return gs.einsum("...i,ijk ->...jk", basis_representation, basis)
