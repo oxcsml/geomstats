@@ -1,5 +1,6 @@
 """Euclidean space."""
 
+import numpy as np
 import geomstats.backend as gs
 from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
 
