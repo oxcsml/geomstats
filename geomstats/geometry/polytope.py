@@ -5,6 +5,12 @@ import numpy as np
 import geomstats.backend as gs
 from geomstats.geometry.euclidean import Euclidean
 
+# todo: if b is always either M, 1 or M, N then
+# you dont need to expand dims and you can handle
+# different b with the same T matrix: this is nice
+# because in our setting the T matrix is always the
+# same; all that changes is the b values! 
+
 def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
     """
     Given a set of N vectors rp in a d-polytope compute the
@@ -53,7 +59,7 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
         rp = rp + a[:, None] * s
         # this is just a test to ensure we are
         # still in the polytope
-        assert(gs.all(T @ rp.T <= b[:, None]))
+        # assert(gs.all(T @ rp.T <= b[:, None]))
         # we are going to reflect around the face
         # we land on, so we grab that face from T
         # and normalize it
