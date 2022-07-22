@@ -5,63 +5,7 @@ import numpy as np
 import geomstats.backend as gs
 from geomstats.geometry.euclidean import Euclidean
 
-def reflect_cond(val):
-    rp, s, sr = val
-    return gs.any(sr > 0)
-
-def reflect_body(val):
-    # compute the amount we can scale in the
-    # direction s before hitting any face,
-    # for any of the rp, s vector pairs
-    rp, s, sr = val
-    sr_mask = (sr > 0)
-    scale = -(((T @ rp.T - b[:, None]) / (T @ s.T)) * sr_mask)
-    # we are moving in the "positive" direction
-    # of s here, so mask out negative values
-    scale_mask = (scale < 0)
-    masked_scale = scale_mask * 2 * gs.abs(scale).max() + (1 - scale_mask) * scale
-    # compute the face we will hit first,
-    # e.g. the minimum scaling that lands us
-    # on a face
-    a_argmax = masked_scale.argmin(axis=0)
-    a_max = scale[a_argmax, gs.arange(scale.shape[1])]
-    # us either the remaining magnitude sr
-    # or the maximum scaling that lands us
-    # on a face to scale in the direction s
-    # add this to values of rp which we still
-    # have magnitude left in their step length
-    a = gs.clip(sr, 0, a_max - eps)
-    rp = rp + a[:, None] * s
-    # this is just a test to ensure we are
-    # still in the polytope
-    assert(gs.all(T @ rp.T <= b[:, None]))
-    # we are going to reflect around the face
-    # we land on, so we grab that face from T
-    # and normalize it
-    n = T[a_argmax, :]
-    n = n / gs.sqrt(gs.sum(n**2, axis=-1))[:, None]
-    # this is the reflection: note we only
-    # need to reflect the direction vector s
-    # about the face. for a single vector
-    # and a single face we can do that using
-    # this eqn: r = s - 2 * dot(s, n) * n
-    # where r is the reflection. for the
-    # vectorized case we compute the row-wise
-    # dot products using gs.sum(s * n, axis=-1)
-    s = s - (2 * gs.sum(s * n, axis=-1)[:, None] * n)
-    # because n and s are normalized the
-    # resulting s should be normalized too
-    # we renormalize for numberical stabilty
-    s = s / gs.sqrt(gs.sum(s**2, axis=-1))[:, None]
-    # now we subtract the distance we
-    # reflected from the magnitude, once this
-    # is negative we stop reflecting that
-    # vector
-    sr = sr - a_max
-    return rp, s, sr
-
-
-def reflect(rp, s, T, b, eps=1e-5, pass_by_value=True):
+def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -80,12 +24,67 @@ def reflect(rp, s, T, b, eps=1e-5, pass_by_value=True):
     # magnitude; we will use the magnitudes
     # here to continue reflecting until we
     # have traveled the whole distance
-    sr = gs.sqrt(gs.sum(s**2, axis=-1))
-    s = s / sr[:, None]
+    def reflect_cond(val):
+        rp, s, sr = val
+        return gs.any(sr > 0)
+
+    def reflect_body(val):
+        # compute the amount we can scale in the
+        # direction s before hitting any face,
+        # for any of the rp, s vector pairs
+        rp, s, sr = val
+        sr_mask = (sr > 0)
+        scale = -(((T @ rp.T - b[:, None]) / (T @ s.T)) * sr_mask)
+        # we are moving in the "positive" direction
+        # of s here, so mask out negative values
+        scale_mask = (scale < 0)
+        masked_scale = scale_mask * 2 * gs.abs(scale).max() + (1 - scale_mask) * scale
+        # compute the face we will hit first,
+        # e.g. the minimum scaling that lands us
+        # on a face
+        a_argmax = masked_scale.argmin(axis=0)
+        a_max = scale[a_argmax, gs.arange(scale.shape[1])]
+        # us either the remaining magnitude sr
+        # or the maximum scaling that lands us
+        # on a face to scale in the direction s
+        # add this to values of rp which we still
+        # have magnitude left in their step length
+        a = gs.clip(sr, 0, a_max - eps)
+        rp = rp + a[:, None] * s
+        # this is just a test to ensure we are
+        # still in the polytope
+        assert(gs.all(T @ rp.T <= b[:, None]))
+        # we are going to reflect around the face
+        # we land on, so we grab that face from T
+        # and normalize it
+        n = T[a_argmax, :]
+        n = n / gs.sqrt(gs.sum(n**2, axis=-1))[:, None]
+        # this is the reflection: note we only
+        # need to reflect the direction vector s
+        # about the face. for a single vector
+        # and a single face we can do that using
+        # this eqn: r = s - 2 * dot(s, n) * n
+        # where r is the reflection. for the
+        # vectorized case we compute the row-wise
+        # dot products using gs.sum(s * n, axis=-1)
+        s = s - (2 * gs.sum(s * n, axis=-1)[:, None] * n)
+        # because n and s are normalized the
+        # resulting s should be normalized too
+        # we renormalize for numberical stabilty
+        s = s / gs.sqrt(gs.sum(s**2, axis=-1))[:, None]
+        # now we subtract the distance we
+        # reflected from the magnitude, once this
+        # is negative we stop reflecting that
+        # vector
+        sr = sr - a_max
+        return rp, s, sr
+
+    sr = gs.sqrt(gs.sum(sn**2, axis=-1))
+    sn = sn / sr[:, None]
     rp, s, sr = jax.lax.while_loop(
         reflect_cond,
         reflect_body,
-        (rp, s, sr)
+        (r, sn, sr)
     )
     return rp
 
