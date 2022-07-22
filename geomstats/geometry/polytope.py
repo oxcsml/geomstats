@@ -20,11 +20,6 @@ def reflect(rp, s, T, b, eps=1e-5, pass_by_value=True):
         the matrix/vector defining the polytope by the
         inequality constraint: T x <= b
     """
-    # this ends up being pass by reference
-    # which may end up with weird behavior
-    # so for now I am just copying
-    if pass_by_value:
-        rp, s = rp.copy(), s.copy()
     # normalize z to a direction and a
     # magnitude; we will use the magnitudes
     # here to continue reflecting until we
