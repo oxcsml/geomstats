@@ -96,8 +96,8 @@ class Polytope(Euclidean):
 
     def __init__(self, constr_path, dataset):
         path = ""
-        T = np.loadtxt(f"{constr_path}/T.{dataset}", delimiter=',')
-        b = np.loadtxt(f"{constr_path}/b.{dataset}", delimiter=','),
+        T = np.loadtxt(f"{constr_path}T.{dataset}", delimiter=',')
+        b = np.loadtxt(f"{constr_path}b.{dataset}", delimiter=','),
         dim = T.shape[1]
         super(Polytope, self).__init__(
             shape=(dim,), default_point_type="vector", metric=EuclideanMetric(dim)
