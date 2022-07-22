@@ -32,7 +32,7 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
     # have traveled the whole distance
     def reflect_cond(val):
         rp, s, sr = val
-        return gs.any(sr > 0)
+        return gs.any(sr > eps)
 
     def reflect_body(val):
         # compute the amount we can scale in the
