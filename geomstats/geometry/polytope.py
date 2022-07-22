@@ -114,8 +114,8 @@ class Polytope(Euclidean):
 
     def __init__(self, constr_path, dataset):
         path = ""
-        T = np.loadtxt(f"{constr_path}T.{dataset}", delimiter=',')
-        b = np.loadtxt(f"{constr_path}b.{dataset}", delimiter=',')
+        T = gs.array(np.loadtxt(f"{constr_path}T.{dataset}", delimiter=','))
+        b = gs.array(np.loadtxt(f"{constr_path}b.{dataset}", delimiter=','))
         dim = T.shape[1]
         super(Polytope, self).__init__(dim=dim)
         self.T, self.b = T, b
