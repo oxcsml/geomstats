@@ -4,7 +4,7 @@ import geomstats.backend as gs
 from geomstats.geometry.base import Euclidean, EuclideanMetric
 
 
-def reflect(rp, s, T, b, eps=1e-8, pass_by_value=True):
+def reflect(rp, s, T, b, eps=1e-5, pass_by_value=True):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -93,7 +93,10 @@ class Polytope(Euclidean):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, T, b):
+    def __init__(self, constr_path, dataset):
+        path = ""
+        T = np.loadtxt(f"{constr_path}/T.{dataset}", delimiter=',')
+        b = np.loadtxt(f"{constr_path}/b.{dataset}", delimiter=','),
         dim = T.shape[1]
         super(Polytope, self).__init__(
             shape=(dim,), default_point_type="vector", metric=EuclideanMetric(dim)
