@@ -1,7 +1,7 @@
 """Euclidean space."""
 
 import geomstats.backend as gs
-from geomstats.geometry.base import Euclidean, EuclideanMetric
+from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
 
 
 def reflect(rp, s, T, b, eps=1e-5, pass_by_value=True):
