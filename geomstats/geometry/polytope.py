@@ -2,7 +2,7 @@
 
 import numpy as np
 import geomstats.backend as gs
-from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
+from geomstats.geometry.euclidean import Euclidean
 
 
 def reflect(rp, s, T, b, eps=1e-5, pass_by_value=True):
@@ -99,9 +99,7 @@ class Polytope(Euclidean):
         T = np.loadtxt(f"{constr_path}T.{dataset}", delimiter=',')
         b = np.loadtxt(f"{constr_path}b.{dataset}", delimiter=','),
         dim = T.shape[1]
-        super(Polytope, self).__init__(
-            shape=(dim,), default_point_type="vector", metric=EuclideanMetric(dim)
-        )
+        super(Polytope, self).__init__(dim=dim)
         self.T, self.b = T, b
 
     def exp(self, tangent_vec, base_point=None):
