@@ -87,16 +87,16 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
 
     sr = gs.sqrt(gs.sum(sn**2, axis=-1))
     sn = sn / sr[:, None]
-    rp, s, sr = jax.lax.while_loop(
-        reflect_cond,
-        reflect_body,
-        (r, sn, sr)
-    )
-    # rp, s, sr = jax.lax.fori_loop(
-    #     0, 20,
+    # rp, s, sr = jax.lax.while_loop(
+    #     reflect_cond,
     #     reflect_body,
     #     (r, sn, sr)
     # )
+    rp, s, sr = jax.lax.fori_loop(
+        0, 20,
+        reflect_body,
+        (r, sn, sr)
+    )
     return rp
 
 
