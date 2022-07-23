@@ -34,7 +34,7 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
         rp, s, sr = val
         return gs.any(sr > 0)
 
-    def reflect_body(i, val):
+    def reflect_body(val):
         # compute the amount we can scale in the
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
@@ -87,16 +87,16 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
 
     sr = gs.sqrt(gs.sum(sn**2, axis=-1))
     sn = sn / sr[:, None]
-    # rp, s, sr = jax.lax.while_loop(
-    #     reflect_cond,
-    #     reflect_body,
-    #     (r, sn, sr)
-    # )
-    rp, s, sr = jax.lax.fori_loop(
-        0, 20,
+    rp, s, sr = jax.lax.while_loop(
+        reflect_cond,
         reflect_body,
         (r, sn, sr)
     )
+    # rp, s, sr = jax.lax.fori_loop(
+    #     0, 20,
+    #     reflect_body,
+    #     (r, sn, sr)
+    # )
     return rp
 
 
