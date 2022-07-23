@@ -34,7 +34,7 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
         rp, s, sr = val
         return gs.any(sr > 0)
 
-    def reflect_body(val):
+    def reflect_body(i, val):
         # compute the amount we can scale in the
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
