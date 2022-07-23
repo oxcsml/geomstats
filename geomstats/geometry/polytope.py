@@ -137,4 +137,8 @@ class Polytope(Euclidean):
         """
         # if not self.belongs(tangent_vec):
             # raise ValueError("The update must be of the same dimension")
-        return reflect(base_point, tangent_vec, self.T, self.b)
+        base_shape = base_point.shape
+        base_point = base_point.reshape(-1, base_shape[-1])
+        tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
+        exp_point = reflect(base_point, tangent_vec, self.T, self.b)
+        return exp_point.reshape(base_shape)
