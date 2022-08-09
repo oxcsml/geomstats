@@ -3,6 +3,9 @@
 import jax
 import numpy as np
 import geomstats.backend as gs
+from scipy.optimize import linprog
+
+from diffrax.misc import bounded_while_loop
 from geomstats.geometry.euclidean import Euclidean
 
 # todo: if b is always either M, 1 or M, N then
@@ -11,7 +14,7 @@ from geomstats.geometry.euclidean import Euclidean
 # because in our setting the T matrix is always the
 # same; all that changes is the b values! 
 
-def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
+def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True, max_iter=1000):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -34,7 +37,7 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
         rp, s, sr = val
         return gs.any(sr > 0)
 
-    def reflect_body(i, val):
+    def reflect_body(val, _):
         # compute the amount we can scale in the
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
@@ -92,11 +95,18 @@ def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True):
     #     reflect_body,
     #     (r, sn, sr)
     # )
-    rp, s, sr = jax.lax.fori_loop(
-        0, 20,
+    # rp, s, sr = jax.lax.fori_loop(
+    #     0, 100,
+    #     reflect_body,
+    #     (r, sn, sr)
+    # )
+    rp, s, sr = bounded_while_loop(
+        reflect_cond,
         reflect_body,
-        (r, sn, sr)
+        (r, sn, sr),
+        max_iter
     )
+    
     return rp
 
 
@@ -119,6 +129,13 @@ class Polytope(Euclidean):
         dim = T.shape[1]
         super(Polytope, self).__init__(dim=dim)
         self.T, self.b = T, b
+        c = np.zeros((T.shape[1],))
+        res = linprog(
+            c, 
+            A_ub=self.T, b_ub=self.b[:, None], 
+            bounds=(None, None)
+        )
+        self.center = res.x
 
     def exp(self, tangent_vec, base_point=None):
         """Compute the group exponential, which is simply the addition.
@@ -142,3 +159,22 @@ class Polytope(Euclidean):
         tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
         exp_point = reflect(base_point, tangent_vec, self.T, self.b)
         return exp_point.reshape(base_shape)
+    
+    @property
+    def log_volume(self):
+        return self.metric.log_volume
+    
+    def random_uniform(self, state, n_samples=1, step_size=0.5):
+        def walk(i, pos):
+            _, samples = gs.random.normal(state=state, size=(n_samples, init.shape[1]))
+            step = step_size * samples
+            return reflect(pos, step, self.T, self.b, max_iter=10) 
+        
+        init = gs.tile(self.center[None, :], (n_samples, 1))
+        samples = jax.lax.fori_loop(
+            0, 100, walk, init
+        )
+        return samples
+        
+        
+        

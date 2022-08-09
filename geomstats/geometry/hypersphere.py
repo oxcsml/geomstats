@@ -114,6 +114,8 @@ class _Hypersphere(EmbeddedManifold):
             Tangent vector in the tangent space of the hypersphere
             at the base point.
         """
+        print(vector.shape, base_point.shape)
+        # raise NotImplemented
         sq_norm = gs.sum(base_point**2, axis=-1)
         inner_prod = self.embedding_metric.inner_product(base_point, vector)
         coef = inner_prod / sq_norm

@@ -44,6 +44,8 @@ class Manifold(abc.ABC):
         self.default_point_type = default_point_type
         self.default_coords_type = default_coords_type
         self.metric = metric
+        # self.embedding_space = self
+        # self.embedding_metric = self.metric
 
     @abc.abstractmethod
     def belongs(self, point, atol=gs.atol):

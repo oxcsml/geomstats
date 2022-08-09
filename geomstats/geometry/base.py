@@ -21,7 +21,7 @@ class VectorSpace(Manifold, abc.ABC):
     """
 
     def __init__(self, shape, default_point_type="vector", **kwargs):
-        if "dim" not in kwargs.keys():
+        if "dim" not in kwargs.keys() or kwargs["dim"] is None:
             kwargs["dim"] = int(np.prod(np.array(shape)))
         super(VectorSpace, self).__init__(
             default_point_type=default_point_type, **kwargs
@@ -175,16 +175,17 @@ class EmbeddedManifold(Manifold, abc.ABC):
     def __init__(
         self,
         dim,
-        embedding_space,
-        submersion,
-        value,
-        tangent_submersion,
+        embedding_space=None,
+        submersion=None,
+        value=None,
+        tangent_submersion=None,
         default_coords_type="intrinsic",
+        default_point_type=None,
         **kwargs
     ):
         super(EmbeddedManifold, self).__init__(
             dim=dim,
-            default_point_type=embedding_space.default_point_type,
+            default_point_type=embedding_space.default_point_type if default_point_type is None else default_point_type,
             default_coords_type=default_coords_type,
             **kwargs
         )

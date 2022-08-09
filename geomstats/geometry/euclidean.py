@@ -1,5 +1,6 @@
 """Euclidean space."""
 
+import math
 import geomstats.backend as gs
 from geomstats.geometry.base import VectorSpace
 from geomstats.geometry.riemannian_metric import RiemannianMetric
@@ -60,7 +61,7 @@ class Euclidean(VectorSpace):
         return tangent_vec + base_point
 
     def eigen_generators(self, x):
-       return gs.expand_dims(gs.eye(self.dim), 0)
+        return gs.expand_dims(gs.eye(self.dim), 0)
 
 
 class EuclideanMetric(RiemannianMetric):
@@ -182,3 +183,12 @@ class EuclideanMetric(RiemannianMetric):
         """
         log = point - base_point
         return log
+    
+    @property
+    def log_volume(self):
+        """log area of n-sphere https://en.wikipedia.org/wiki/N-sphere#Closed_forms"""
+        return math.log(self.dim)
+
+    @property
+    def volume(self):
+        return self.dim
