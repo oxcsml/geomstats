@@ -203,6 +203,24 @@ class ProductSameManifold(ProductManifold):
             default_point_type=default_point_type, **kwargs
         )
     
+    def _iterate_over_manifolds(self, func, kwargs, in_axes=-2, out_axes=-2):
+        method = getattr(self.manifold, func)
+        in_axes = []
+        args_list = []
+        for key, value in kwargs.items():
+            if hasattr(value, "reshape"):
+                if value.shape[0] == self.mul:
+                    value = value.T.reshape((*value.shape[1:], self.mul)).T
+                else:
+                    value = value.reshape((*value.shape[:-1], self.mul, -1))
+                in_axes.append(-2)
+            else:
+                in_axes.append(None)
+            args_list.append(value)
+        out = jax.vmap(method, in_axes=in_axes, out_axes=out_axes)(*args_list)
+        out = out.reshape((*out.shape[:out_axes], -1))
+        return out
+    
 class Product2Manifolds(ProductManifold):
     def __init__(
         self, manifold_a, manifold_b, **kwargs
