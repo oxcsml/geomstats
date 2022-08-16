@@ -32,7 +32,6 @@ class NonEmbeddedProductManifold(Manifold):
         self.manifold_dims = [manifold.dim for manifold in self.manifolds]
         self.cum_dims = np.cumsum(self.manifold_dims).tolist()
 
-    # @partial(jit, static_argnums=[0, 1])
     def _iterate_over_manifolds(self, func, kwargs, in_axes=-2, out_axes=-2):
         out = []
         for i, manifold in enumerate(self.manifolds):
@@ -46,10 +45,11 @@ class NonEmbeddedProductManifold(Manifold):
                     else:
                         manifold_kwargs[key] = value[..., (self.cum_dims[i] - self.manifold_dims[i]):self.cum_dims[i]]
                 else:
-                    manifold_kwargs[key] = values
-            out.append(getattr(manifold, func)(**manifold_kwargs))
-        if None in out:
-            return None
+                    manifold_kwargs[key] = value
+            _out = getattr(manifold, func)(**manifold_kwargs)
+            if _out is None:
+                return None
+            out.append(_out)
         return gs.concatenate(out, axis=-1)
 
     def belongs(self, point, atol=gs.atol):
@@ -152,16 +152,7 @@ class NonEmbeddedProductManifold(Manifold):
 
     # TODO: I CBA to write product groups rn, this is a hacky af way to get the isom_group.dim thing to work for moser flows
 
-    @property
-    def isom_group(self):
-        class dotdict(dict):
-            """dot.notation access to dictionary attributes"""
 
-            __getattr__ = dict.get
-            __setattr__ = dict.__setitem__
-            __delattr__ = dict.__delitem__
-
-        return dotdict(dim=sum([manifold.isom_group.dim for manifold in self.manifolds]))
 
 class ProductManifold(NonEmbeddedProductManifold, EmbeddedManifold):
     def __init__(self, manifolds, metric=None, embedding_space=None, default_point_type="vector", **kwargs):
@@ -220,14 +211,4 @@ class ProductSameManifold(ProductManifold):
         out = jax.vmap(method, in_axes=in_axes, out_axes=out_axes)(*args_list)
         out = out.reshape((*out.shape[:out_axes], -1))
         return out
-    
-class Product2Manifolds(ProductManifold):
-    def __init__(
-        self, manifold_a, manifold_b, **kwargs
-    ):
-        super(Product2Manifolds, self).__init__(
-            manifolds=[manifold_a, manifold_b],
-            **kwargs
-        )
-
-    
+  

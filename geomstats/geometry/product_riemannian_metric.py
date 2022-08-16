@@ -42,7 +42,6 @@ class ProductRiemannianMetric(RiemannianMetric):
 
     def _iterate_over_metrics(self, func, kwargs, in_axes=-2, out_axes=-2):
         out = []
-        print("metric", func, self.metrics)
         for i, metric in enumerate(self.metrics):
             metric_kwargs = {}
             for key, value in kwargs.items():

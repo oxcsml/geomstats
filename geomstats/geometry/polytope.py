@@ -14,7 +14,7 @@ from geomstats.geometry.euclidean import Euclidean
 # because in our setting the T matrix is always the
 # same; all that changes is the b values! 
 
-def reflect(r, sn, T, b, eps=1e-5, pass_by_value=True, max_iter=1000):
+def reflect(r, sn, T, b, eps=1e-4, pass_by_value=True, max_iter=1000):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -122,14 +122,12 @@ class Polytope(Euclidean):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, constr_path, dataset):
-        path = ""
-        T = gs.array(np.loadtxt(f"{constr_path}T.{dataset}", delimiter=','))
-        b = gs.array(np.loadtxt(f"{constr_path}b.{dataset}", delimiter=','))
-        dim = T.shape[1]
+    def __init__(self, n_links=16):
+        data = np.load(f"/data/ziz/not-backed-up/fishman/score-sde/data/walk.{n_links}.npz")
+        self.T, self.b = gs.array(data['T']), gs.array(data['b'])
+        dim = self.T.shape[1]
         super(Polytope, self).__init__(dim=dim)
-        self.T, self.b = T, b
-        c = np.zeros((T.shape[1],))
+        c = np.zeros((self.T.shape[1],))
         res = linprog(
             c, 
             A_ub=self.T, b_ub=self.b[:, None], 
