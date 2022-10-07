@@ -1,12 +1,11 @@
 """Euclidean space."""
-
+from geomstats.geometry.euclidean import Euclidean
 import jax
 import numpy as np
-import geomstats.backend as gs
+import jax.numpy as gs
 from scipy.optimize import linprog
 
 from diffrax.misc import bounded_while_loop
-from geomstats.geometry.euclidean import Euclidean
 
 # todo: if b is always either M, 1 or M, N then
 # you dont need to expand dims and you can handle
@@ -14,7 +13,10 @@ from geomstats.geometry.euclidean import Euclidean
 # because in our setting the T matrix is always the
 # same; all that changes is the b values! 
 
-def reflect(r, sn, T, b, eps=1e-4, pass_by_value=True, max_iter=1000):
+def stable_div(num, den, eps=1e-10):
+    return gs.sign(num) * gs.sign(den) * gs.exp(gs.log(gs.abs(num) + eps) - gs.log(gs.abs(den) + eps))
+
+def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, pass_by_value=True, max_iter=100_000):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -29,6 +31,7 @@ def reflect(r, sn, T, b, eps=1e-4, pass_by_value=True, max_iter=1000):
         the matrix/vector defining the polytope by the
         inequality constraint: T x <= b
     """
+
     # normalize z to a direction and a
     # magnitude; we will use the magnitudes
     # here to continue reflecting until we
@@ -43,11 +46,13 @@ def reflect(r, sn, T, b, eps=1e-4, pass_by_value=True, max_iter=1000):
         # for any of the rp, s vector pairs
         rp, s, sr = val
         sr_mask = (sr > 0)
-        scale = -(((T @ rp.T - b[:, None]) / (T @ s.T)) * sr_mask)
+        num, den = T @ rp.T - b[:, None], T @ s.T
+        scale = -stable_div(num, den) * sr_mask
+        scale = gs.clip(scale, -max_val, max_val)
         # we are moving in the "positive" direction
         # of s here, so mask out negative values
-        scale_mask = (scale < 0)
-        masked_scale = scale_mask * 2 * gs.abs(scale).max() + (1 - scale_mask) * scale
+        scale_mask = scale <= 0
+        masked_scale = scale_mask * max_val + (1 - scale_mask) * scale
         # compute the face we will hit first,
         # e.g. the minimum scaling that lands us
         # on a face
@@ -58,8 +63,11 @@ def reflect(r, sn, T, b, eps=1e-4, pass_by_value=True, max_iter=1000):
         # on a face to scale in the direction s
         # add this to values of rp which we still
         # have magnitude left in their step length
-        a = gs.clip(sr, 0, a_max - eps)
+        a = gs.maximum(gs.minimum(sr, a_max), 0)
         rp = rp + a[:, None] * s
+        diff = (T @ rp.T - b[:, None])
+        idx = diff >= -eps2
+        rp = rp + (T.T @ (-(gs.abs(diff) + eps) * idx)).T
         # this is just a test to ensure we are
         # still in the polytope
         # assert(gs.all(T @ rp.T <= b[:, None]))
@@ -85,21 +93,11 @@ def reflect(r, sn, T, b, eps=1e-4, pass_by_value=True, max_iter=1000):
         # reflected from the magnitude, once this
         # is negative we stop reflecting that
         # vector
-        sr = sr - a_max
+        sr = sr - a
         return rp, s, sr
-
+    
     sr = gs.sqrt(gs.sum(sn**2, axis=-1))
     sn = sn / sr[:, None]
-    # rp, s, sr = jax.lax.while_loop(
-    #     reflect_cond,
-    #     reflect_body,
-    #     (r, sn, sr)
-    # )
-    # rp, s, sr = jax.lax.fori_loop(
-    #     0, 100,
-    #     reflect_body,
-    #     (r, sn, sr)
-    # )
     rp, s, sr = bounded_while_loop(
         reflect_cond,
         reflect_body,
@@ -122,8 +120,11 @@ class Polytope(Euclidean):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, n_links=16):
-        data = np.load(f"/data/ziz/not-backed-up/fishman/score-sde/data/walk.{n_links}.npz")
+    def __init__(self, n_links=16, npz=None):
+        if npz is not None:
+            data = np.load(npz)
+        else:
+            data = np.load(f"/data/ziz/not-backed-up/fishman/score-sde/data/walk.0.{n_links}.npz")
         self.T, self.b = gs.array(data['T']), gs.array(data['b'])
         dim = self.T.shape[1]
         super(Polytope, self).__init__(dim=dim)
@@ -162,17 +163,21 @@ class Polytope(Euclidean):
     def log_volume(self):
         return self.metric.log_volume
     
-    def random_uniform(self, state, n_samples=1, step_size=0.5):
-        def walk(i, pos):
-            _, samples = gs.random.normal(state=state, size=(n_samples, init.shape[1]))
+    def random_uniform(self, state, n_samples=1, step_size=10., num_steps=100_000):
+        def walk(i, carry):
+            rng, pos = carry
+            rng, next_rng = jax.random.split(rng)  
+            samples = jax.random.normal(rng, shape=(n_samples, pos.shape[1]))
             step = step_size * samples
-            return reflect(pos, step, self.T, self.b, max_iter=10) 
+            return next_rng, reflect(pos, step, self.T, self.b) 
         
         init = gs.tile(self.center[None, :], (n_samples, 1))
-        samples = jax.lax.fori_loop(
-            0, 100, walk, init
+        _, samples = jax.lax.fori_loop(
+            0, num_steps, walk, (state, init)
         )
         return samples
         
+    def belongs(self, x, atol=1e-12):
+        return self.T @ x.T <= self.b[:, None] + atol
         
         
