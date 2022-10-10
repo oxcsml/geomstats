@@ -109,7 +109,10 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, pass_by_value=True,
 
 
 def to_params(x):
-    # this is jittable
+    """
+    x is a set of euclidean coordinates of chains with 
+    fixed end points
+    """
     diag = x[1:, :] - x[0, :]
     l = gs.sqrt(gs.sum((x[1:-1] - x[2:])**2, axis=1))
     d = gs.sqrt(gs.sum((x[0]-x[-1])**2))
@@ -126,36 +129,55 @@ def to_params(x):
     tau = gs.array(tau)
     return r, tau, l, d
 
-def to_euclidean(r, tau, l, x0, xn, xn1):
-    # not jittable
+def to_euclidean(r, tau, s, l, d, x0, xn):
+    """
+    r is a point in the polytope 
+    tau is a point in the torus of the same dim as the polytope
+    s is a point on the unit sphere (R^3)
+    l is the set of lengths of the lings
+    d is the distance from the start to end points
+    x0 is the start point
+    xn is the endpoint
+    """
+    xn1 = xn + d * s
     m = r.shape[0] + 1
 
     diag = gs.ones((m - 1, 3))
     n = gs.ones((m - 2, 3))
     gamma = gs.ones(m-3)
 
-    diag[m-2] = xn - x0
-    diag[m-3] = xn1 - x0
+    diag = diag.at[m-2].set(xn - x0)
+    diag = diag.at[m-3].set(xn1 - x0)
+    diag = diag.at[m-2].set(xn - x0)
     diag /= gs.sqrt(gs.sum((diag)**2, axis=1))[:, None]
 
-    n[m-3] = gs.cross(diag[-1], diag[-2])
+    n = n.at[m-3].set(gs.cross(diag[-1], diag[-2]))
     n /= gs.sqrt(gs.sum((n)**2, axis=1))[:, None]
     
     x = gs.zeros((m, 3))
-    x[0], x[m-2], x[m-1] = x0, xn1, xn
+    x = x.at[0].set(x0)
+    x = x.at[m-2].set(xn1)
+    x = x.at[m-1].set(xn)
 
     for j in range(m-2-2, -1, -1):
-        n[j] = diag[j + 1] * (diag[j + 1] @ n[j+1]) + \
-               gs.cos(-tau[j]) * gs.cross(gs.cross(diag[j + 1], n[j+1]), diag[j + 1]) + \
-               gs.sin(-tau[j]) * gs.cross(diag[j + 1], n[j+1])
+        n = n.at[j].set(
+            diag[j + 1] * (diag[j + 1] @ n[j+1]) + \
+            gs.cos(-tau[j]) * gs.cross(gs.cross(diag[j + 1], n[j+1]), diag[j + 1]) + \
+            gs.sin(-tau[j]) * gs.cross(diag[j + 1], n[j+1])
+        )
         n /= gs.sqrt(gs.sum((n)**2, axis=1))[:, None]
-        gamma[j] = gs.arccos((r[j]**2 + r[j+1]**2 - l[j]**2) / (2 * r[j] * r[j+1]))
-        diag[j] = n[j] * (n[j] @ diag[j+1]) + \
-                  gs.cos(gamma[j]) * gs.cross(gs.cross(n[j], diag[j+1]), n[j]) + \
-                  gs.sin(gamma[j]) * gs.cross(n[j], diag[j+1])
+        gamma = gamma.at[j].set(
+            gs.arccos((r[j]**2 + r[j+1]**2 - l[j]**2) / (2 * r[j] * r[j+1]))
+        )
+        diag = diag.at[j].set(
+            n[j] * (n[j] @ diag[j+1]) + \
+            gs.cos(gamma[j]) * gs.cross(gs.cross(n[j], diag[j+1]), n[j]) + \
+            gs.sin(gamma[j]) * gs.cross(n[j], diag[j+1])
+        )
         diag /= gs.sqrt(gs.sum((diag)**2, axis=1))[:, None]
-        x[j+1] = x0 + r[j] * diag[j]
+        x = x.at[j+1].set(x0 + r[j] * diag[j])
     return x
+
 
 def get_constraints(l, D):
     m = l.shape[0] + 2
@@ -174,8 +196,6 @@ def get_constraints(l, D):
     T[-1, -1], b[-1] = -1, - gs.abs(l[-3] - D)
     return T, b
 
-
-
 class Polytope(Euclidean):
     """Class for Euclidean spaces.
 
@@ -188,12 +208,15 @@ class Polytope(Euclidean):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, n_links=16, npz=None):
+    def __init__(self, T=None, b=None, npz=None):
         if npz is not None:
             data = np.load(npz)
+            self.T, self.b = gs.array(data['T']), gs.array(data['b'])
+        elif T is not None and b is not None:
+            self.T, self.b = gs.array(T), gs.array(b)
         else:
-            data = np.load(f"/data/ziz/not-backed-up/fishman/score-sde/data/walk.0.{n_links}.npz")
-        self.T, self.b = gs.array(data['T']), gs.array(data['b'])
+            raise ValueError("You need either the inequality matrices or "
+                             "an archive pointing to them")
         dim = self.T.shape[1]
         super(Polytope, self).__init__(dim=dim)
         c = np.zeros((self.T.shape[1],))
