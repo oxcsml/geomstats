@@ -129,7 +129,7 @@ def to_params(x):
     tau = gs.array(tau)
     return r, tau, l, d
 
-def to_euclidean(r, tau, s, l, d, x0, xn):
+def to_euclidean(r, tau, l, x0, xn1, xn):
     """
     r is a point in the polytope 
     tau is a point in the torus of the same dim as the polytope
@@ -139,8 +139,7 @@ def to_euclidean(r, tau, s, l, d, x0, xn):
     x0 is the start point
     xn is the endpoint
     """
-    xn1 = xn + d * s
-    m = r.shape[0] + 1
+    m = r.shape[0] + 2
 
     diag = gs.ones((m - 1, 3))
     n = gs.ones((m - 2, 3))
@@ -151,7 +150,7 @@ def to_euclidean(r, tau, s, l, d, x0, xn):
     diag = diag.at[m-2].set(xn - x0)
     diag /= gs.sqrt(gs.sum((diag)**2, axis=1))[:, None]
 
-    n = n.at[m-3].set(gs.cross(diag[-1], diag[-2]))
+    n = n.at[m-3].set(gs.cross(diag[-2], diag[-1]))
     n /= gs.sqrt(gs.sum((n)**2, axis=1))[:, None]
     
     x = gs.zeros((m, 3))
@@ -171,13 +170,14 @@ def to_euclidean(r, tau, s, l, d, x0, xn):
         )
         diag = diag.at[j].set(
             n[j] * (n[j] @ diag[j+1]) + \
-            gs.cos(gamma[j]) * gs.cross(gs.cross(n[j], diag[j+1]), n[j]) + \
-            gs.sin(gamma[j]) * gs.cross(n[j], diag[j+1])
+            gs.cos(-gamma[j]) * gs.cross(gs.cross(n[j], diag[j+1]), n[j]) + \
+            gs.sin(-gamma[j]) * gs.cross(n[j], diag[j+1])
         )
         diag /= gs.sqrt(gs.sum((diag)**2, axis=1))[:, None]
         x = x.at[j+1].set(x0 + r[j] * diag[j])
     return x
 
+te = jax.vmap(to_euclidean, in_axes=(0, 0, None, None, None, None))
 
 def get_constraints(l, D):
     m = l.shape[0] + 2
@@ -192,8 +192,8 @@ def get_constraints(l, D):
         T[i + 1, j], T[i + 1, j + 1], b[i + 1] = -1, 1, l[j + k]
         T[i + 2, j], T[i + 2, j + 1], b[i + 2] = -1, -1, -l[j + k]
         i += 3
-    T[-2, -1], b[-2] = 1, l[-3] + D
-    T[-1, -1], b[-1] = -1, - gs.abs(l[-3] - D)
+    T[-2, -1], b[-2] = 1, l[-2] + D
+    T[-1, -1], b[-1] = -1, -gs.abs(l[-2] - D)
     return T, b
 
 class Polytope(Euclidean):
@@ -254,7 +254,7 @@ class Polytope(Euclidean):
     def log_volume(self):
         return self.metric.log_volume
     
-    def random_uniform(self, state, n_samples=1, step_size=10., num_steps=100_000):
+    def random_uniform(self, state, n_samples=1, step_size=1., num_steps=10_000):
         def walk(i, carry):
             rng, pos = carry
             rng, next_rng = jax.random.split(rng)  
