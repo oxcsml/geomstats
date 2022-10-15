@@ -18,9 +18,10 @@ class Euclidean(VectorSpace):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, dim):
+    def __init__(self, dim, metric=None):
         super(Euclidean, self).__init__(
-            shape=(dim,), default_point_type="vector", metric=EuclideanMetric(dim)
+            shape=(dim,), default_point_type="vector",
+            metric=EuclideanMetric(dim) if metric is not None else metric
         )
 
     def get_identity(self, point_type=None):

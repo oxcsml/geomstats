@@ -1,5 +1,5 @@
 """Euclidean space."""
-from geomstats.geometry.euclidean import Euclidean
+from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
 import jax
 import numpy as np
 import jax.numpy as gs
@@ -13,10 +13,12 @@ from diffrax.misc import bounded_while_loop
 # because in our setting the T matrix is always the
 # same; all that changes is the b values! 
 
+
 def stable_div(num, den, eps=1e-10):
     return gs.sign(num) * gs.sign(den) * gs.exp(gs.log(gs.abs(num) + eps) - gs.log(gs.abs(den) + eps))
 
-def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, pass_by_value=True, max_iter=100_000):
+
+def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -108,93 +110,50 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, pass_by_value=True,
     return rp
 
 
-def to_params(x):
+class ReflectedPolytopeMetric(EuclideanMetric):
+    """Class for Euclidean metrics.
+
+    As a Riemannian metric, the Euclidean metric is:
+    - flat: the inner-product is independent of the base point.
+    - positive definite: it has signature (dimension, 0, 0),
+    where dimension is the dimension of the Euclidean space.
+
+    Parameters
+    ----------
+    dim : int
+        Dimension of the Euclidean space.
     """
-    x is a set of euclidean coordinates of chains with 
-    fixed end points
-    """
-    diag = x[1:, :] - x[0, :]
-    l = gs.sqrt(gs.sum((x[1:-1] - x[2:])**2, axis=1))
-    d = gs.sqrt(gs.sum((x[0]-x[-1])**2))
-    r = gs.sqrt(gs.sum((diag)**2, axis=1))
-    diag /= r[:, None]
 
-    n = gs.cross(diag[:-1, :], diag[1:, :])
-    n /= gs.sqrt(gs.sum(n**2, axis=1))[:, None]
-
-    tau = []
-    for j in range(n.shape[0] - 1):
-        theta = gs.sign(n[j + 1] @ diag[j]) * gs.arccos(n[j + 1] @ n[j])
-        tau.append(theta)
-    tau = gs.array(tau)
-    return r, tau, l, d
-
-def to_euclidean(r, tau, l, x0, xn1, xn):
-    """
-    r is a point in the polytope 
-    tau is a point in the torus of the same dim as the polytope
-    s is a point on the unit sphere (R^3)
-    l is the set of lengths of the lings
-    d is the distance from the start to end points
-    x0 is the start point
-    xn is the endpoint
-    """
-    m = r.shape[0] + 2
-
-    diag = gs.ones((m - 1, 3))
-    n = gs.ones((m - 2, 3))
-    gamma = gs.ones(m-3)
-
-    diag = diag.at[m-2].set(xn - x0)
-    diag = diag.at[m-3].set(xn1 - x0)
-    diag = diag.at[m-2].set(xn - x0)
-    diag /= gs.sqrt(gs.sum((diag)**2, axis=1))[:, None]
-
-    n = n.at[m-3].set(gs.cross(diag[-2], diag[-1]))
-    n /= gs.sqrt(gs.sum((n)**2, axis=1))[:, None]
-    
-    x = gs.zeros((m, 3))
-    x = x.at[0].set(x0)
-    x = x.at[m-2].set(xn1)
-    x = x.at[m-1].set(xn)
-
-    for j in range(m-2-2, -1, -1):
-        n = n.at[j].set(
-            diag[j + 1] * (diag[j + 1] @ n[j+1]) + \
-            gs.cos(-tau[j]) * gs.cross(gs.cross(diag[j + 1], n[j+1]), diag[j + 1]) + \
-            gs.sin(-tau[j]) * gs.cross(diag[j + 1], n[j+1])
+    def __init__(self, T, b, default_point_type="vector"):
+        self.T, self.b = T, b
+        dim = self.T.shape[1]
+        super(ReflectedPolytopeMetric, self).__init__(
+            dim=dim, signature=(dim, 0), default_point_type=default_point_type
         )
-        n /= gs.sqrt(gs.sum((n)**2, axis=1))[:, None]
-        gamma = gamma.at[j].set(
-            gs.arccos((r[j]**2 + r[j+1]**2 - l[j]**2) / (2 * r[j] * r[j+1]))
-        )
-        diag = diag.at[j].set(
-            n[j] * (n[j] @ diag[j+1]) + \
-            gs.cos(-gamma[j]) * gs.cross(gs.cross(n[j], diag[j+1]), n[j]) + \
-            gs.sin(-gamma[j]) * gs.cross(n[j], diag[j+1])
-        )
-        diag /= gs.sqrt(gs.sum((diag)**2, axis=1))[:, None]
-        x = x.at[j+1].set(x0 + r[j] * diag[j])
-    return x
 
-te = jax.vmap(to_euclidean, in_axes=(0, 0, None, None, None, None))
+    def exp(self, tangent_vec, base_point, **kwargs):
+        """Compute exp map of a base point in tangent vector direction.
 
-def get_constraints(l, D):
-    m = l.shape[0] + 2
-    T = np.zeros((3 * m - 8, m - 3))
-    b = np.zeros((3 * m - 8))
-    T[0, 0], b[0] = 1, l[0] + l[1]
-    T[1, 0], b[1] = -1, -gs.abs(l[0] - l[1])
-    i = 2
-    k = 1
-    for j in range(0, m-4):
-        T[i, j], T[i, j + 1], b[i] = 1, -1, l[j + k]
-        T[i + 1, j], T[i + 1, j + 1], b[i + 1] = -1, 1, l[j + k]
-        T[i + 2, j], T[i + 2, j + 1], b[i + 2] = -1, -1, -l[j + k]
-        i += 3
-    T[-2, -1], b[-2] = 1, l[-2] + D
-    T[-1, -1], b[-1] = -1, -gs.abs(l[-2] - D)
-    return T, b
+        The Riemannian exponential is vector addition in the Euclidean space.
+
+        Parameters
+        ----------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        base_point : array-like, shape=[..., dim]
+            Base point.
+
+        Returns
+        -------
+        exp : array-like, shape=[..., dim]
+            Riemannian exponential.
+        """
+        base_shape = base_point.shape
+        base_point = base_point.reshape(-1, base_shape[-1])
+        tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
+        exp_point = reflect(base_point, tangent_vec, self.T, self.b)
+        return exp_point.reshape(base_shape)
+
 
 class Polytope(Euclidean):
     """Class for Euclidean spaces.
@@ -218,7 +177,9 @@ class Polytope(Euclidean):
             raise ValueError("You need either the inequality matrices or "
                              "an archive pointing to them")
         dim = self.T.shape[1]
-        super(Polytope, self).__init__(dim=dim)
+        super(Polytope, self).__init__(dim=dim, metric=ReflectedPolytopeMetric(self.T, self.b))
+        # used to compute a point in the interior of the polytope
+        # which we can do random walks from to generate random samples
         c = np.zeros((self.T.shape[1],))
         res = linprog(
             c, 
@@ -242,13 +203,7 @@ class Polytope(Euclidean):
         point : array-like, shape=[..., n]
             Group exponential.
         """
-        # if not self.belongs(tangent_vec):
-            # raise ValueError("The update must be of the same dimension")
-        base_shape = base_point.shape
-        base_point = base_point.reshape(-1, base_shape[-1])
-        tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
-        exp_point = reflect(base_point, tangent_vec, self.T, self.b)
-        return exp_point.reshape(base_shape)
+        return self.metric.exp(tangent_vec, base_point)
     
     @property
     def log_volume(self):
