@@ -110,6 +110,86 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
     return rp
 
 
+class Polytope(Euclidean):
+    """Class for Euclidean spaces.
+
+    By definition, a Euclidean space is a vector space of a given
+    dimension, equipped with a Euclidean metric.
+
+    Parameters
+    ----------
+    dim : int
+        Dimension of the Euclidean space.
+    """
+
+    def __init__(self, T=None, b=None, npz=None, metric=None, metric_type="Reflected"):
+        if npz is not None:
+            data = np.load(npz)
+            self.T, self.b = gs.array(data['T']), gs.array(data['b'])
+        elif T is not None and b is not None:
+            self.T, self.b = gs.array(T), gs.array(b)
+        else:
+            raise ValueError("You need either the inequality matrices or "
+                             "an archive pointing to them")
+        dim = self.T.shape[1]
+        if metric is not None:
+            if metric_type == "Reflected":
+                metric = ReflectedPolytopeMetric(self.T, self.b)
+            elif metric_type == "Hessian":
+                raise NotImplementedError
+            else:
+                raise NotImplementedError
+
+        super(Polytope, self).__init__(dim=dim, metric=metric)
+        # used to compute a point in the interior of the polytope
+        # which we can do random walks from to generate random samples
+        c = np.zeros((self.T.shape[1],))
+        res = linprog(
+            c, 
+            A_ub=self.T, b_ub=self.b[:, None], 
+            bounds=(None, None)
+        )
+        self.center = res.x
+
+    def exp(self, tangent_vec, base_point=None):
+        """Compute the group exponential, which is simply the addition.
+
+        Parameters
+        ----------
+        tangent_vec : array-like, shape=[..., n]
+            Tangent vector at base point.
+        base_point : array-like, shape=[..., n]
+            Point from which the exponential is computed.
+
+        Returns
+        -------
+        point : array-like, shape=[..., n]
+            Group exponential.
+        """
+        return self.metric.exp(tangent_vec, base_point)
+    
+    @property
+    def log_volume(self):
+        return self.metric.log_volume
+    
+    def random_uniform(self, state, n_samples=1, step_size=1., num_steps=10_000):
+        def walk(_, carry):
+            rng, pos = carry
+            rng, next_rng = jax.random.split(rng)  
+            samples = jax.random.normal(rng, shape=(n_samples, pos.shape[1]))
+            step = step_size * samples
+            return next_rng, self.metric.exp(step, pos)
+        
+        init = gs.tile(self.center[None, :], (n_samples, 1))
+        _, samples = jax.lax.fori_loop(
+            0, num_steps, walk, (state, init)
+        )
+        return samples
+        
+    def belongs(self, x, atol=1e-12):
+        return self.T @ x.T <= self.b[:, None] + atol
+        
+        
 class ReflectedPolytopeMetric(EuclideanMetric):
     """Class for Euclidean metrics.
 
@@ -153,77 +233,3 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
         exp_point = reflect(base_point, tangent_vec, self.T, self.b)
         return exp_point.reshape(base_shape)
-
-
-class Polytope(Euclidean):
-    """Class for Euclidean spaces.
-
-    By definition, a Euclidean space is a vector space of a given
-    dimension, equipped with a Euclidean metric.
-
-    Parameters
-    ----------
-    dim : int
-        Dimension of the Euclidean space.
-    """
-
-    def __init__(self, T=None, b=None, npz=None):
-        if npz is not None:
-            data = np.load(npz)
-            self.T, self.b = gs.array(data['T']), gs.array(data['b'])
-        elif T is not None and b is not None:
-            self.T, self.b = gs.array(T), gs.array(b)
-        else:
-            raise ValueError("You need either the inequality matrices or "
-                             "an archive pointing to them")
-        dim = self.T.shape[1]
-        super(Polytope, self).__init__(dim=dim, metric=ReflectedPolytopeMetric(self.T, self.b))
-        # used to compute a point in the interior of the polytope
-        # which we can do random walks from to generate random samples
-        c = np.zeros((self.T.shape[1],))
-        res = linprog(
-            c, 
-            A_ub=self.T, b_ub=self.b[:, None], 
-            bounds=(None, None)
-        )
-        self.center = res.x
-
-    def exp(self, tangent_vec, base_point=None):
-        """Compute the group exponential, which is simply the addition.
-
-        Parameters
-        ----------
-        tangent_vec : array-like, shape=[..., n]
-            Tangent vector at base point.
-        base_point : array-like, shape=[..., n]
-            Point from which the exponential is computed.
-
-        Returns
-        -------
-        point : array-like, shape=[..., n]
-            Group exponential.
-        """
-        return self.metric.exp(tangent_vec, base_point)
-    
-    @property
-    def log_volume(self):
-        return self.metric.log_volume
-    
-    def random_uniform(self, state, n_samples=1, step_size=1., num_steps=10_000):
-        def walk(i, carry):
-            rng, pos = carry
-            rng, next_rng = jax.random.split(rng)  
-            samples = jax.random.normal(rng, shape=(n_samples, pos.shape[1]))
-            step = step_size * samples
-            return next_rng, reflect(pos, step, self.T, self.b) 
-        
-        init = gs.tile(self.center[None, :], (n_samples, 1))
-        _, samples = jax.lax.fori_loop(
-            0, num_steps, walk, (state, init)
-        )
-        return samples
-        
-    def belongs(self, x, atol=1e-12):
-        return self.T @ x.T <= self.b[:, None] + atol
-        
-        

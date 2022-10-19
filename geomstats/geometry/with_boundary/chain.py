@@ -88,3 +88,4 @@ def get_constraints(l, D):
     T[-2, -1], b[-2] = 1, l[-2] + D
     T[-1, -1], b[-1] = -1, -gs.abs(l[-2] - D)
     return T, b
+
