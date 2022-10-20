@@ -136,7 +136,7 @@ class Polytope(Euclidean):
             if metric_type == "Reflected":
                 metric = ReflectedPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
-                raise NotImplementedError
+                metric = HessianPolytopeMetric(self.T, self.b)
             else:
                 raise NotImplementedError
 
@@ -191,20 +191,7 @@ class Polytope(Euclidean):
         
         
 class ReflectedPolytopeMetric(EuclideanMetric):
-    """Class for Euclidean metrics.
-
-    As a Riemannian metric, the Euclidean metric is:
-    - flat: the inner-product is independent of the base point.
-    - positive definite: it has signature (dimension, 0, 0),
-    where dimension is the dimension of the Euclidean space.
-
-    Parameters
-    ----------
-    dim : int
-        Dimension of the Euclidean space.
-    """
-
-    def __init__(self, T, b, default_point_type="vector"):
+    def __init__(self, T, b, default_point_type="vector", **kwargs):
         self.T, self.b = T, b
         dim = self.T.shape[1]
         super(ReflectedPolytopeMetric, self).__init__(
@@ -212,24 +199,33 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
-        """Compute exp map of a base point in tangent vector direction.
-
-        The Riemannian exponential is vector addition in the Euclidean space.
-
-        Parameters
-        ----------
-        tangent_vec : array-like, shape=[..., dim]
-            Tangent vector at base point.
-        base_point : array-like, shape=[..., dim]
-            Base point.
-
-        Returns
-        -------
-        exp : array-like, shape=[..., dim]
-            Riemannian exponential.
-        """
         base_shape = base_point.shape
         base_point = base_point.reshape(-1, base_shape[-1])
         tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
         exp_point = reflect(base_point, tangent_vec, self.T, self.b)
         return exp_point.reshape(base_shape)
+
+
+class HessianPolytopeMetric(EuclideanMetric):
+    def __init__(self, T, b, default_point_type="vector", **kwargs):
+        self.T, self.b = T, b
+        dim = self.T.shape[1]
+        super(HessianPolytopeMetric, self).__init__(
+            dim=dim, signature=(dim, 0), default_point_type=default_point_type
+        )
+
+    def metric_matrix(self, x):
+        return self.T.T @ gs.diag(self.b[:, None] - self.T @ x.T) @ self.T
+
+    def metric_matrix_inv(self, x):
+        return gs.linalg.inv(self.metric_matrix(x))
+
+    def metric_matrix_inv_sqrt(self, x):
+        return gs.sqrt(self.metric_matrix_inv(x))
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        base_point += tangent_vec
+        diff = (self.T @ base_point.T - self.b[:, None])
+        idx = diff >= 0
+        return base_point + (self.T.T @ (-(gs.abs(diff)) * idx)).T
+
