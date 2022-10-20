@@ -122,7 +122,7 @@ class Polytope(Euclidean):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, T=None, b=None, npz=None, metric=None, metric_type="Reflected"):
+    def __init__(self, T=None, b=None, npz=None, metric=None, metric_type="Reflected", **kwargs):
         if npz is not None:
             data = np.load(npz)
             self.T, self.b = gs.array(data['T']), gs.array(data['b'])
@@ -132,7 +132,7 @@ class Polytope(Euclidean):
             raise ValueError("You need either the inequality matrices or "
                              "an archive pointing to them")
         dim = self.T.shape[1]
-        if metric is not None:
+        if metric is None:
             if metric_type == "Reflected":
                 metric = ReflectedPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
@@ -228,3 +228,4 @@ class HessianPolytopeMetric(EuclideanMetric):
         diff = (self.T @ base_point.T - self.b[:, None])
         idx = diff >= 0
         return base_point + (self.T.T @ (-(gs.abs(diff)) * idx)).T
+
