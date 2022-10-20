@@ -203,7 +203,7 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         base_point = base_point.reshape(-1, base_shape[-1])
         tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
         exp_point = reflect(base_point, tangent_vec, self.T, self.b)
-        return exp_point.reshape(base_shape)
+        return exp_point # reflect(base_point, tangent_vec, self.T, self.b)
 
 
 class HessianPolytopeMetric(EuclideanMetric):
