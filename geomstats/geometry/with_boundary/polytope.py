@@ -200,11 +200,11 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
-        # base_shape = base_point.shape
-        # base_point = base_point.reshape(-1, base_shape[-1])
-        # tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
-        # exp_point = reflect(base_point, tangent_vec, self.T, self.b)
-        return reflect(base_point, tangent_vec, self.T, self.b)
+        base_shape = base_point.shape
+        base_point = base_point.reshape(-1, base_shape[-1])
+        tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
+        exp_point = reflect(base_point, tangent_vec, self.T, self.b)
+        return exp_point.reshape(base_shape) #reflect(base_point, tangent_vec, self.T, self.b)
 
 
 class HessianPolytopeMetric(EuclideanMetric):
@@ -218,17 +218,17 @@ class HessianPolytopeMetric(EuclideanMetric):
     def metric_matrix(self, x, t, z):
         def calc(x):
             return self.T.T @ gs.diag(self.b - self.T @ x.T) @ self.T
-        return jax.vmap(calc)(x)
+        return jax.vmap(calc)(x.reshape(-1, x.shape[-1])).reshape(x.shape)
 
     def metric_inverse_matrix(self, x, t, z):
         def calc(x):
             return self.T.T @ gs.diag((self.b - self.T @ x.T)**-1) @ self.T
-        return jax.vmap(calc)(x)
+        return jax.vmap(calc)(x.reshape(-1, x.shape[-1])).reshape(x.shape)
 
     def metric_inverse_matrix_sqrt(self, x, t, z):
         def calc(x):
             return self.T.T @ gs.diag((self.b - self.T @ x.T)**(-1/2)) @ self.T
-        return jax.vmap(calc)(x)
+        return jax.vmap(calc)(x.reshape(-1, x.shape[-1])).reshape(x.shape)
 
     def exp(self, tangent_vec, base_point, **kwargs):
         base_point += tangent_vec
