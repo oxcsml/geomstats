@@ -195,7 +195,7 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         self.T, self.b = T, b
         dim = self.T.shape[1]
         super(ReflectedPolytopeMetric, self).__init__(
-            dim=dim, signature=(dim, 0), default_point_type=default_point_type
+            dim=dim, default_point_type=default_point_type
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
@@ -211,7 +211,7 @@ class HessianPolytopeMetric(EuclideanMetric):
         self.T, self.b = T, b
         dim = self.T.shape[1]
         super(HessianPolytopeMetric, self).__init__(
-            dim=dim, signature=(dim, 0), default_point_type=default_point_type
+            dim=dim, default_point_type=default_point_type
         )
 
     def metric_matrix(self, x):
