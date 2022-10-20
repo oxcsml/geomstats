@@ -218,17 +218,17 @@ class HessianPolytopeMetric(EuclideanMetric):
     def metric_matrix(self, x, t, z):
         def calc(x):
             return self.T.T @ gs.diag(self.b - self.T @ x.T) @ self.T
-        return jax.vmap(calc)(x.reshape(-1, x.shape[-1])).reshape(x.shape)
+        return jax.vmap(calc)(x)
 
     def metric_inverse_matrix(self, x, t, z):
         def calc(x):
             return self.T.T @ gs.diag((self.b - self.T @ x.T)**-1) @ self.T
-        return jax.vmap(calc)(x.reshape(-1, x.shape[-1])).reshape(x.shape)
+        return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x, t, z):
         def calc(x):
             return self.T.T @ gs.diag((self.b - self.T @ x.T)**(-1/2)) @ self.T
-        return jax.vmap(calc)(x.reshape(-1, x.shape[-1])).reshape(x.shape)
+        return jax.vmap(calc)(x)
 
     def exp(self, tangent_vec, base_point, **kwargs):
         base_point += tangent_vec
