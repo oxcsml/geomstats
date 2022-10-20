@@ -125,7 +125,13 @@ BACKEND_ATTRIBUTES = {
         "zeros",
         "zeros_like",
     ],
-    "autodiff": ["custom_gradient", "detach", "jacobian", "value_and_grad"],
+    "autodiff": [
+        "custom_gradient",
+        "detach",
+        "grad",
+        "jacobian",
+        "value_and_grad",
+    ],
     "linalg": [
         "cholesky",
         "det",

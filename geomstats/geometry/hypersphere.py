@@ -667,21 +667,6 @@ class _Hypersphere(EmbeddedManifold):
     def log_volume(self):
         return self.metric.log_volume
 
-    def logdetexp(self, x, y, is_vector=False):
-        return self.metric.logdetexp(x, y, is_vector)
-
-    def hat(self, point):
-        return point
-
-    def vee(self, point):
-        return point
-
-    def exp(self, tangent_vec, base_point, **kwargs):
-        return self.metric.exp(tangent_vec, base_point, **kwargs)
-
-    def log(self, point, base_point, **kwargs):
-        return self.metric.log(point, base_point, **kwargs)
-
 
 class HypersphereMetric(RiemannianMetric):
     """Class for the Hypersphere Metric.
@@ -978,6 +963,9 @@ class HypersphereMetric(RiemannianMetric):
         # NOTE: taylor_exp_even_func takes x^2 as input
         sinc = utils.taylor_exp_even_func(radius_squared, utils.sinc_close_0)
         return (self.dim - 1) * gs.log(sinc)
+
+    def grad(self, func):
+        return self.embedding_metric.grad(func)
 
     @property
     def log_volume(self):

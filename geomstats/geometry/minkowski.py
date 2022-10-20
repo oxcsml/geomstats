@@ -121,3 +121,10 @@ class MinkowskiMetric(RiemannianMetric):
         """
         log = point - base_point
         return log
+
+    def grad(self, func):
+        def grad(x):
+            out = gs.autodiff.grad(func)(x)
+            return gs.assignment(out, -out[..., 0], (0), axis=-1)
+
+        return grad

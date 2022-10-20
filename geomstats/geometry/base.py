@@ -23,9 +23,7 @@ class VectorSpace(Manifold, abc.ABC):
     def __init__(self, shape, default_point_type="vector", **kwargs):
         if "dim" not in kwargs.keys() or kwargs["dim"] is None:
             kwargs["dim"] = int(np.prod(np.array(shape)))
-        super(VectorSpace, self).__init__(
-            default_point_type=default_point_type, **kwargs
-        )
+        super(VectorSpace, self).__init__(default_point_type=default_point_type, **kwargs)
         self.shape = shape
 
     def belongs(self, point, atol=gs.atol):
@@ -331,20 +329,24 @@ class EmbeddedManifold(Manifold, abc.ABC):
         tangent_vec : array-like, shape=[..., dim]
             Tangent vector at base point.
         """
-        state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.embedding_space.dim))
+        state, ambiant_noise = gs.random.normal(
+            state=state, size=(n_samples, self.embedding_space.dim)
+        )
         return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
 
     def log_heat_kernel_exp(self, x0, x, t):
         t = t / 2  # NOTE: to match random walk
         r_squared = self.metric.squared_dist(x0, x)
-        log_u_0 = - 0.5 * self.metric.log_metric_polar(r_squared)
-        return - self.dim / 2 * gs.log(4 * gs.pi) \
-            - self.dim / 2 * gs.log(t) \
-            - r_squared / (4 * t) \
+        log_u_0 = -0.5 * self.metric.log_metric_polar(r_squared)
+        return (
+            -self.dim / 2 * gs.log(4 * gs.pi)
+            - self.dim / 2 * gs.log(t)
+            - r_squared / (4 * t)
             + log_u_0
+        )
 
     def log_heat_kernel(self, x0, x, t, thresh, n_max):
-        # TODO: How to choose condition? should condition be on radius not on time? 
+        # TODO: How to choose condition? should condition be on radius not on time?
         cond = t <= thresh
         approx = self.log_heat_kernel_exp(x0, x, t)
         exact = self._log_heat_kernel(x0, x, t, n_max=n_max)
@@ -356,12 +358,15 @@ class EmbeddedManifold(Manifold, abc.ABC):
     def grad_marginal_log_prob(self, x0, x, t, thresh, n_max):
         cond = gs.expand_dims(t <= thresh, -1)
         approx = self.grad_log_heat_kernel_exp(x0, x, t)
-        log_heat_kernel = lambda x0, x, s: gs.reshape(self._log_heat_kernel(x0, x, s, n_max=n_max), ())
+        log_heat_kernel = lambda x0, x, s: gs.reshape(
+            self._log_heat_kernel(x0, x, s, n_max=n_max), ()
+        )
         # TODO: use gs backend and not jax explicitly
         logp_grad_fn = jax.grad(log_heat_kernel, argnums=1)
         logp_grad = jax.vmap(logp_grad_fn)(x0, x, t)
         exact = self.to_tangent(logp_grad, x)
         return gs.where(cond, approx, exact)
+
 
 class OpenSet(Manifold, abc.ABC):
     """Class for manifolds that are open sets of a vector space.
@@ -457,3 +462,24 @@ class OpenSet(Manifold, abc.ABC):
         projected : array-like, shape=[..., dim]
             Projected point.
         """
+
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        state, ambiant_noise = gs.random.normal(
+            state=state, size=(n_samples, self.ambient_space.dim)
+        )
+        return state, ambiant_noise

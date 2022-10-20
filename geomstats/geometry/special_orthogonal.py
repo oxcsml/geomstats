@@ -275,10 +275,10 @@ class _SpecialOrthogonalMatrices(MatrixLieGroup, EmbeddedManifold):
         mask = x_norm > 1e-10
         x_norm = gs.where(mask, x_norm, gs.ones_like(x_norm))
 
-        ratio = gs.where(
-            mask, (2 - 2 * gs.cos(x_norm)) / x_norm**2, 1 - x_norm**2 / 12
-        )
-        # return gs.log(ratio)#.to(x.dtype)
+        # ratio = gs.where(
+        #     mask, (2 - 2 * gs.cos(x_norm)) / x_norm**2, 1 - x_norm**2 / 12
+        # )
+        # out = gs.log(ratio)
         out = math.log(2) + gs.log1p(-gs.cos(x_norm)) - 2 * gs.log(x_norm)
         return out
 

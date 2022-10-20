@@ -35,6 +35,13 @@ SINHC_TAYLOR_COEFFS = [
     1 / math.factorial(7),
     1 / math.factorial(9),
 ]
+LOG_SINHC_TAYLOR_COEFFS = [
+    0.0,
+    1 / 6,
+    1 / 180,
+    1 / 2835,
+    1 / 37800,
+]
 COSH_TAYLOR_COEFFS = [
     1.0,
     1 / math.factorial(2),
@@ -51,8 +58,8 @@ INV_SINHC_TAYLOR_COEFFS = [
 ]
 INV_TANH_TAYLOR_COEFFS = [1.0, 1.0 / 3.0, -1.0 / 45.0, 2.0 / 945.0, -1.0 / 4725.0]
 TANH_TAYLOR_COEFFS = [1.0, -1.0 / 3.0, 2.0 / 15.0, -17.0 / 315.0, 62.0 / 2835.0]
-LOG_TANH_TAYLOR_COEFFS = [0., -1.0 / 3.0, 7.0 / 90.0, -62.0 / 2835.0, 127.0 / 18900.0]
-LOG1P_M_TANH_SQ_TAYLOR_COEFFS = [0., -1.0, 1.0 / 6.0, -2.0 / 45.0, 17.0 / 1260.0]
+LOG_TANH_TAYLOR_COEFFS = [0.0, -1.0 / 3.0, 7.0 / 90.0, -62.0 / 2835.0, 127.0 / 18900.0]
+LOG1P_M_TANH_SQ_TAYLOR_COEFFS = [0.0, -1.0, 1.0 / 6.0, -2.0 / 45.0, 17.0 / 1260.0]
 ARCTANH_CARD_TAYLOR_COEFFS = [1.0, 1.0 / 3.0, 1.0 / 5.0, 1 / 7.0, 1.0 / 9]
 
 
@@ -67,20 +74,24 @@ inv_tanc_close_0 = {
     "coefficients": INV_TANC_TAYLOR_COEFFS,
 }
 cosc_close_0 = {
-    "function": lambda x: (1 - gs.cos(x)) / x ** 2,
+    "function": lambda x: (1 - gs.cos(x)) / x**2,
     "coefficients": COSC_TAYLOR_COEFFS,
 }
 var_sinc_close_0 = {
-    "function": lambda x: (x - gs.sin(x)) / x ** 3,
+    "function": lambda x: (x - gs.sin(x)) / x**3,
     "coefficients": [-k for k in SINC_TAYLOR_COEFFS[1:]],
 }
 var_inv_tanc_close_0 = {
-    "function": lambda x: (1 - (x / gs.tan(x))) / x ** 2,
+    "function": lambda x: (1 - (x / gs.tan(x))) / x**2,
     "coefficients": VAR_INV_TAN_TAYLOR_COEFFS,
 }
 sinch_close_0 = {
     "function": lambda x: gs.sinh(x) / x,
     "coefficients": SINHC_TAYLOR_COEFFS,
+}
+log_sinch_close_0 = {
+    "function": lambda x: gs.log(gs.sinh(x) / x),
+    "coefficients": LOG_SINHC_TAYLOR_COEFFS,
 }
 cosh_close_0 = {"function": gs.cosh, "coefficients": COSH_TAYLOR_COEFFS}
 inv_sinch_close_0 = {
@@ -175,7 +186,7 @@ def taylor_exp_even_func(point, taylor_function, order=5, tol=EPSILON):
     approx = gs.einsum(
         "k,k...->...",
         gs.array(taylor_function["coefficients"][:order]),
-        gs.array([point ** k for k in range(order)]),
+        gs.array([point**k for k in range(order)]),
     )
     point_ = gs.where(gs.abs(point) <= tol, tol, point)
     exact = taylor_function["function"](gs.sqrt(point_))
@@ -237,7 +248,7 @@ def rotate_points(points, end_point):
     q, _ = gs.linalg.qr(gs.transpose(embedded) / norm)
     new_points = gs.matmul(points[None, :], gs.transpose(q)) * norm
     # if not gs.allclose(gs.matmul(q, base_point[:, None])[:, 0], end_point):
-        # new_points = -new_points
+    # new_points = -new_points
     cond = gs.isclose(gs.matmul(q, base_point[:, None])[:, 0], end_point)
     new_points = gs.where(cond, new_points, -new_points)
     return new_points[0]

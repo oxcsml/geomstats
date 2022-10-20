@@ -45,6 +45,10 @@ class PoincareBall(_Hyperbolic, OpenSet):
         self.coords_type = PoincareBall.default_coords_type
         self.point_type = PoincareBall.default_point_type
 
+    @property
+    def identity(self):
+        return gs.zeros((self.ambient_space.dim))
+
     def belongs(self, point, atol=gs.atol):
         """Test if a point belongs to the hyperbolic space.
 
@@ -66,7 +70,7 @@ class PoincareBall(_Hyperbolic, OpenSet):
             Array of booleans indicating whether the corresponding points
             belong to the hyperbolic space.
         """
-        return gs.sum(point ** 2, axis=-1) < (1 - atol)
+        return gs.sum(point**2, axis=-1) < (1 - atol)
 
     def projection(self, point):
         """Project a point on the ball.
@@ -88,14 +92,39 @@ class PoincareBall(_Hyperbolic, OpenSet):
             raise NameError("Wrong dimension, expected ", self.dim)
 
         l2_norm = gs.linalg.norm(point, axis=-1)
-        if gs.any(l2_norm >= 1 - gs.atol):
-            projected_point = gs.einsum(
-                "...j,...->...j", point * (1 - gs.atol), 1.0 / l2_norm
-            )
-            projected_point = -gs.maximum(-projected_point, -point)
-            return projected_point
+        # if gs.any(l2_norm >= 1 - gs.atol):
+        projected_point = gs.einsum(
+            "...j,...->...j", point * (1 - gs.atol), 1.0 / l2_norm
+        )
+        projected_point = -gs.maximum(-projected_point, -point)
+        point = gs.where((l2_norm >= 1 - gs.atol)[..., None], projected_point, point)
+        # return projected_point
 
         return point
+
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        state, ambiant_noise = gs.random.normal(
+            state=state, size=(n_samples, self.ambient_space.dim)
+        )
+        # ambiant_noise *= self.metric.lambda_x_inv(base_point)[..., None]
+        ambiant_noise = self.metric.transpfrom0(base_point, ambiant_noise)
+
+        return state, ambiant_noise
 
 
 class PoincareBallMetric(RiemannianMetric):
@@ -136,7 +165,7 @@ class PoincareBallMetric(RiemannianMetric):
             Point in the Poincare ball equal to the Riemannian exponential
             of tangent_vec at the base point.
         """
-        squared_norm_bp = gs.sum(base_point ** 2, axis=-1)
+        squared_norm_bp = gs.sum(base_point**2, axis=-1)
         norm_tan = gs.linalg.norm(tangent_vec, axis=-1)
         lambda_base_point = 1 / (1 - squared_norm_bp)
 
@@ -146,9 +175,7 @@ class PoincareBallMetric(RiemannianMetric):
 
         factor = gs.tanh(lambda_base_point * norm_tan)
 
-        exp = self.mobius_add(
-            base_point, gs.einsum("...,...i->...i", factor, direction)
-        )
+        exp = self.mobius_add(base_point, gs.einsum("...,...i->...i", factor, direction))
 
         return exp
 
@@ -169,8 +196,8 @@ class PoincareBallMetric(RiemannianMetric):
             of point at the base point.
         """
         mobius_addition = self.mobius_add(-base_point, point)
-        squared_norm_add = gs.sum(mobius_addition ** 2, axis=-1)
-        squared_norm_bp = gs.sum(base_point ** 2, axis=-1)
+        squared_norm_add = gs.sum(mobius_addition**2, axis=-1)
+        squared_norm_bp = gs.sum(base_point**2, axis=-1)
         coef = (1 - squared_norm_bp) * utils.taylor_exp_even_func(
             squared_norm_add, utils.arctanh_card_close_0
         )
@@ -214,8 +241,8 @@ class PoincareBallMetric(RiemannianMetric):
                 raise ValueError("Points do not belong to the Poincare ball")
 
         inner = gs.sum(point_a * point_b, axis=-1)
-        squared_norm_a = gs.sum(point_a ** 2, axis=-1)
-        squared_norm_b = gs.sum(point_b ** 2, axis=-1)
+        squared_norm_a = gs.sum(point_a**2, axis=-1)
+        squared_norm_b = gs.sum(point_b**2, axis=-1)
         num_1 = gs.einsum("...,...i->...i", 1 + 2 * inner + squared_norm_b, point_a)
         num_2 = gs.einsum("...,...i->...i", 1 - squared_norm_a, point_b)
         result = gs.einsum(
@@ -241,13 +268,13 @@ class PoincareBallMetric(RiemannianMetric):
         dist : array-like, shape=[...,]
             Geodesic distance between the two points.
         """
-        point_a_norm = gs.clip(gs.sum(point_a ** 2, -1), 0.0, 1 - EPSILON)
-        point_b_norm = gs.clip(gs.sum(point_b ** 2, -1), 0.0, 1 - EPSILON)
+        point_a_norm = gs.clip(gs.sum(point_a**2, -1), 0.0, 1 - EPSILON)
+        point_b_norm = gs.clip(gs.sum(point_b**2, -1), 0.0, 1 - EPSILON)
 
         diff_norm = gs.sum((point_a - point_b) ** 2, -1)
         norm_function = 1 + 2 * diff_norm / ((1 - point_a_norm) * (1 - point_b_norm))
 
-        dist = gs.log(norm_function + gs.sqrt(norm_function ** 2 - 1))
+        dist = gs.log(norm_function + gs.sqrt(norm_function**2 - 1))
         dist *= self.scale
         return dist
 
@@ -279,7 +306,7 @@ class PoincareBallMetric(RiemannianMetric):
             raise NameError("Points do not belong to the Poincare ball")
 
         retraction_factor = (
-            (1 - gs.sum(base_point ** 2, axis=-1, keepdims=True)) ** 2
+            (1 - gs.sum(base_point**2, axis=-1, keepdims=True)) ** 2
         ) / 4
 
         return base_point - gs.einsum("...i,...j->...j", retraction_factor, tangent_vec)
@@ -306,6 +333,41 @@ class PoincareBallMetric(RiemannianMetric):
         identity = gs.eye(self.dim, self.dim)
 
         return gs.einsum("i,jk->ijk", lambda_base, identity)
+
+    def squared_norm(self, vector, base_point):
+        sq_norm = gs.einsum("...k,...k->...", vector, vector)
+        sq_norm = sq_norm * self.lambda_x(base_point) ** 2
+        return sq_norm
+
+    def lambda_x(self, base_point):
+        """G(x)=\lambda(x)^2 Id"""
+        lambda_base = 2 / (1 - gs.sum(base_point * base_point, axis=-1))
+        return gs.clip(lambda_base, 1e-15)
+
+    def lambda_x_inv(self, base_point):
+        return gs.clip(1 - gs.power(base_point, 2).sum(axis=-1), 1e-15) / 2
+
+    def transpfrom0(self, y, v):
+        return v * self.lambda_x_inv(y)[..., None]# * 2
+        # return v * gs.clip(1 - gs.power(y, 2).sum(axis=-1), 1e-15)[..., None]
+        # return v / self.lambda_x(y)[..., None] * 2
+
+    def transpback0(self, x, v):
+        # return v / gs.clip(1 - gs.power(x, 2).sum(axis=-1), 1e-15)[..., None]
+        return v * self.lambda_x(x)[..., None]# / 2
+
+    def logdetexp(self, x, y, is_vector=False):
+        d = self.norm(y, x) if is_vector else self.dist(x, y)
+        # log_sinch = gs.log(gs.sinh(d) / d)
+        log_sinch = utils.taylor_exp_even_func(d**2, utils.log_sinch_close_0)
+        return (self.dim - 1) * log_sinch
+
+    def grad(self, func):
+        def grad(x):
+            out = gs.autodiff.grad(func)(x)
+            return self.lambda_x_inv(x)[..., None] ** 2 * out
+
+        return grad
 
     def normalization_factor(self, variances):
         """Return normalization factor of the Gaussian distribution.
@@ -424,7 +486,7 @@ class PoincareBallMetric(RiemannianMetric):
         grad_term_211 = (
             gs.exp((prod_alpha_sigma) ** 2)
             * (1 + gs.erf(prod_alpha_sigma))
-            * gs.einsum("ij,j->ij", sigma_repeated, alpha ** 2)
+            * gs.einsum("ij,j->ij", sigma_repeated, alpha**2)
             * 2
         )
 

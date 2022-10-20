@@ -32,6 +32,10 @@ class NonEmbeddedProductManifold(Manifold):
         self.manifold_dims = [manifold.dim for manifold in self.manifolds]
         self.cum_dims = np.cumsum(self.manifold_dims).tolist()
 
+    @property
+    def identity(self):
+        return gs.repeat(gs.expand_dims(self.manifold.identity, -2), self.mul, -2)
+
     def _iterate_over_manifolds(self, func, kwargs, in_axes=-2, out_axes=-2):
         out = []
         for i, manifold in enumerate(self.manifolds):

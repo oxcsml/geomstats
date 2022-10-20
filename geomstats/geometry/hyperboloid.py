@@ -54,6 +54,11 @@ class Hyperboloid(_Hyperbolic, EmbeddedManifold):
         self.point_type = Hyperboloid.default_point_type
         self.metric = HyperboloidMetric(self.dim, self.coords_type, self.scale)
 
+    @property
+    def identity(self):
+        out = gs.zeros((self.embedding_space.dim))
+        return gs.assignment(out, 1.0, (0), axis=-1)
+
     def belongs(self, point, atol=gs.atol):
         """Test if a point belongs to the hyperbolic space.
 
@@ -129,11 +134,11 @@ class Hyperboloid(_Hyperbolic, EmbeddedManifold):
             point = self.intrinsic_to_extrinsic_coords(point)
 
         sq_norm = self.embedding_metric.squared_norm(point)
-        if not gs.all(sq_norm):
-            raise ValueError(
-                "Cannot project a vector of norm 0. in the "
-                "Minkowski space to the hyperboloid"
-            )
+        # if not gs.all(sq_norm):
+        #     raise ValueError(
+        #         "Cannot project a vector of norm 0. in the "
+        #         "Minkowski space to the hyperboloid"
+        #     )
         real_norm = gs.sqrt(gs.abs(sq_norm))
         projected_point = gs.einsum("...i,...->...i", point, 1.0 / real_norm)
 
@@ -236,6 +241,34 @@ class Hyperboloid(_Hyperbolic, EmbeddedManifold):
             point_extrinsic, "extrinsic", "intrinsic"
         )
 
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.dim))
+        ambiant_noise = gs.concatenate([gs.zeros((n_samples, 1)), ambiant_noise], axis=-1)
+        ambiant_noise = self.metric.transpfrom0(base_point, ambiant_noise)
+
+        return state, ambiant_noise
+
+    def hat(self, point):
+        return gs.concatenate([gs.zeros((*point.shape[:-1], 1)), point], axis=-1)
+
+    def vee(self, point):
+        return point[..., 1:]
+
 
 class HyperboloidMetric(HyperbolicMetric):
     """Class that defines operations using a hyperbolic metric.
@@ -279,7 +312,7 @@ class HyperboloidMetric(HyperbolicMetric):
         inner_prod_mat: array-like, shape=[..., dim+1, dim + 1]
             Inner-product matrix.
         """
-        self.embedding_metric.metric_matrix(base_point)
+        return self.embedding_metric.metric_matrix(base_point)
 
     def _inner_product(self, tangent_vec_a, tangent_vec_b, base_point=None):
         """Compute the inner-product of two tangent vectors at a base point.
@@ -379,12 +412,8 @@ class HyperboloidMetric(HyperbolicMetric):
         """
         angle = self.dist(base_point, point) / self.scale
 
-        coef_1_ = utils.taylor_exp_even_func(
-            angle ** 2, utils.inv_sinch_close_0, order=4
-        )
-        coef_2_ = utils.taylor_exp_even_func(
-            angle ** 2, utils.inv_tanh_close_0, order=4
-        )
+        coef_1_ = utils.taylor_exp_even_func(angle**2, utils.inv_sinch_close_0, order=4)
+        coef_2_ = utils.taylor_exp_even_func(angle**2, utils.inv_tanh_close_0, order=4)
 
         log_term_1 = gs.einsum("...,...j->...j", coef_1_, point)
         log_term_2 = -gs.einsum("...,...j->...j", coef_2_, base_point)
@@ -411,7 +440,7 @@ class HyperboloidMetric(HyperbolicMetric):
         inner_prod = self.embedding_metric.inner_product(point_a, point_b)
 
         cosh_angle = -inner_prod / gs.sqrt(sq_norm_a * sq_norm_b)
-        cosh_angle = gs.clip(cosh_angle, 1.0, 1e24)
+        cosh_angle = gs.clip(cosh_angle, 1.0 + 1e-7, 1e24)
 
         dist = gs.arccosh(cosh_angle)
         dist *= self.scale
@@ -449,3 +478,31 @@ class HyperboloidMetric(HyperbolicMetric):
             + p_orth
         )
         return transported
+
+    @property
+    def identity(self):
+        out = gs.zeros((self.dim + 1))
+        return gs.assignment(out, 1.0, (0), axis=-1)
+
+    def parallel_transport2(self, x, y, v):
+        alpha = -self.inner_product(x, y)[..., None]
+        coef = self.inner_product(y, v)[..., None] / (alpha + 1)
+        return v + coef * (x + y)
+
+    def transpfrom0(self, y, v):
+        x = gs.broadcast_to(self.identity, v.shape)
+        return self.parallel_transport2(x, y, v)
+
+    def transpback0(self, x, v):
+        y = gs.broadcast_to(self.identity, x.shape)
+        # NOTE: returning a manifold.dim dimensional vector
+        return self.parallel_transport2(x, y, v)[..., 1:]
+
+    def logdetexp(self, x, y, is_vector=False):
+        d = self.norm(y, x) if is_vector else self.dist(x, y)
+        # log_sinch = gs.log(gs.sinh(d) / d)
+        log_sinch = utils.taylor_exp_even_func(d**2, utils.log_sinch_close_0)
+        return (self.dim - 1) * log_sinch
+
+    def grad(self, func):
+        return self.embedding_metric.grad(func)

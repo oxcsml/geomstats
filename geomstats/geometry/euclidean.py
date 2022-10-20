@@ -58,7 +58,7 @@ class Euclidean(VectorSpace):
             Group exponential.
         """
         # if not self.belongs(tangent_vec):
-            # raise ValueError("The update must be of the same dimension")
+        # raise ValueError("The update must be of the same dimension")
         return tangent_vec + base_point
 
     def eigen_generators(self, x):
@@ -184,7 +184,7 @@ class EuclideanMetric(RiemannianMetric):
         """
         log = point - base_point
         return log
-    
+
     @property
     def log_volume(self):
         """log area of n-sphere https://en.wikipedia.org/wiki/N-sphere#Closed_forms"""
@@ -193,3 +193,6 @@ class EuclideanMetric(RiemannianMetric):
     @property
     def volume(self):
         return self.dim
+
+    def grad(self, func):
+        return lambda x: gs.autodiff.grad(func)(x)
