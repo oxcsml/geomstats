@@ -215,13 +215,13 @@ class HessianPolytopeMetric(EuclideanMetric):
             dim=dim, default_point_type=default_point_type
         )
 
-    def metric_matrix(self, x):
+    def metric_matrix(self, x, **kwargs):
         return self.T.T @ gs.diag(self.b[:, None] - self.T @ x.T) @ self.T
 
-    def metric_matrix_inv(self, x):
+    def metric_matrix_inv(self, x, **kwargs):
         return gs.linalg.inv(self.metric_matrix(x))
 
-    def metric_matrix_inv_sqrt(self, x):
+    def metric_matrix_inv_sqrt(self, x, **kwargs):
         return gs.sqrt(self.metric_matrix_inv(x))
 
     def exp(self, tangent_vec, base_point, **kwargs):
