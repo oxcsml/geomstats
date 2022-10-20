@@ -217,7 +217,7 @@ class HessianPolytopeMetric(EuclideanMetric):
 
     def metric_matrix(self, x, t, z):
         def calc(x):
-            return self.T.T @ gs.diag(self.b[:, None] - self.T @ x.T) @ self.T
+            return self.T.T @ gs.diag(self.b - self.T @ x.T) @ self.T
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix(self, x, t, z):
