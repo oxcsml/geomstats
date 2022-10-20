@@ -141,6 +141,7 @@ class Polytope(Euclidean):
                 raise NotImplementedError
 
         super(Polytope, self).__init__(dim=dim, metric=metric)
+        self.metric = metric
         # used to compute a point in the interior of the polytope
         # which we can do random walks from to generate random samples
         c = np.zeros((self.T.shape[1],))
@@ -199,11 +200,11 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
-        base_shape = base_point.shape
-        base_point = base_point.reshape(-1, base_shape[-1])
-        tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
-        exp_point = reflect(base_point, tangent_vec, self.T, self.b)
-        return exp_point # reflect(base_point, tangent_vec, self.T, self.b)
+        # base_shape = base_point.shape
+        # base_point = base_point.reshape(-1, base_shape[-1])
+        # tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
+        # exp_point = reflect(base_point, tangent_vec, self.T, self.b)
+        return reflect(base_point, tangent_vec, self.T, self.b)
 
 
 class HessianPolytopeMetric(EuclideanMetric):
