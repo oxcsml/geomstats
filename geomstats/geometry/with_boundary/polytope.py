@@ -186,6 +186,16 @@ class Polytope(Euclidean):
             0, num_steps, walk, (state, init)
         )
         return samples
+
+    def random_walk(self, rng, x, t):
+        rng, z = self.random_normal_tangent(
+            state=rng, base_point=x, n_samples=x.shape[0]
+        )
+        if len(t.shape) == len(x.shape) - 1:
+            t = t[..., None]
+        tangent_vector = gs.sqrt(t) * z
+        samples = self.metric.exp(tangent_vec=tangent_vector, base_point=x)
+        return samples
         
     def belongs(self, x, atol=1e-12):
         return self.T @ x.T <= self.b[:, None] + atol
@@ -235,4 +245,3 @@ class HessianPolytopeMetric(EuclideanMetric):
         diff = (self.T @ base_point.T - self.b[:, None])
         idx = diff >= 0
         return base_point + (self.T.T @ (-(gs.abs(diff)) * idx)).T
-
