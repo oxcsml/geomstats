@@ -153,20 +153,6 @@ class Polytope(Euclidean):
         self.center = res.x
 
     def exp(self, tangent_vec, base_point=None):
-        """Compute the group exponential, which is simply the addition.
-
-        Parameters
-        ----------
-        tangent_vec : array-like, shape=[..., n]
-            Tangent vector at base point.
-        base_point : array-like, shape=[..., n]
-            Point from which the exponential is computed.
-
-        Returns
-        -------
-        point : array-like, shape=[..., n]
-            Group exponential.
-        """
         return self.metric.exp(tangent_vec, base_point)
     
     @property
@@ -194,7 +180,7 @@ class Polytope(Euclidean):
         if len(t.shape) == len(x.shape) - 1:
             t = t[..., None]
         tangent_vector = gs.sqrt(t) * z
-        samples = self.metric.exp(tangent_vec=tangent_vector, base_point=x)
+        samples = self.exp(tangent_vec=tangent_vector, base_point=x)
         return samples
         
     def belongs(self, x, atol=1e-12):
@@ -240,8 +226,8 @@ class HessianPolytopeMetric(EuclideanMetric):
             return self.T.T @ gs.diag((self.b - self.T @ x.T)**(-1/2)) @ self.T
         return jax.vmap(calc)(x)
 
-    def exp(self, tangent_vec, base_point, **kwargs):
+    def exp(self, tangent_vec, base_point, eps2=1e-6, **kwargs):
         base_point += tangent_vec
         diff = (self.T @ base_point.T - self.b[:, None])
-        idx = diff >= 0
+        idx = diff >= eps2
         return base_point + (self.T.T @ (-(gs.abs(diff)) * idx)).T
