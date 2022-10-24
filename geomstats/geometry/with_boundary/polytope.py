@@ -211,23 +211,26 @@ class HessianPolytopeMetric(EuclideanMetric):
             dim=dim, default_point_type=default_point_type
         )
 
-    def metric_matrix(self, x, t, z):
+    def metric_matrix(self, x, t, z, eps=1e-6):
         def calc(x):
-            return self.T.T @ gs.diag(self.b - self.T @ x.T) @ self.T
+            res = np.maximum(self.b - self.T @ x.T, eps)
+            return self.T.T @ gs.diag(res) @ self.T
         return jax.vmap(calc)(x)
 
-    def metric_inverse_matrix(self, x, t, z):
+    def metric_inverse_matrix(self, x, t, z, eps=1e-6):
         def calc(x):
-            return self.T.T @ gs.diag((self.b - self.T @ x.T)**-1) @ self.T
+            res = np.maximum(self.b - self.T @ x.T, eps)
+            return self.T.T @ gs.diag(res**-1) @ self.T
         return jax.vmap(calc)(x)
 
-    def metric_inverse_matrix_sqrt(self, x, t, z):
+    def metric_inverse_matrix_sqrt(self, x, t, z, eps=1e-6):
         def calc(x):
-            return self.T.T @ gs.diag((self.b - self.T @ x.T)**(-1/2)) @ self.T
+            res = np.maximum(self.b - self.T @ x.T, eps)
+            return self.T.T @ gs.diag(res**(-1/2)) @ self.T
         return jax.vmap(calc)(x)
 
-    def exp(self, tangent_vec, base_point, eps2=1e-6, **kwargs):
+    def exp(self, tangent_vec, base_point, **kwargs):
         base_point += tangent_vec
         diff = (self.T @ base_point.T - self.b[:, None])
-        idx = diff >= eps2
+        idx = diff >= 0
         return base_point + (self.T.T @ (-(gs.abs(diff)) * idx)).T
