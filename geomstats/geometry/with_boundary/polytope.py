@@ -229,8 +229,8 @@ class HessianPolytopeMetric(EuclideanMetric):
             return self.T.T @ gs.diag(res**(-1/2)) @ self.T
         return jax.vmap(calc)(x)
 
-    def exp(self, tangent_vec, base_point, **kwargs):
+    def exp(self, tangent_vec, base_point, eps=1e-8, **kwargs):
         base_point += tangent_vec
         diff = (self.T @ base_point.T - self.b[:, None])
-        idx = diff >= 0
+        idx = diff >= -eps
         return base_point + (self.T.T @ (-(gs.abs(diff)) * idx)).T
