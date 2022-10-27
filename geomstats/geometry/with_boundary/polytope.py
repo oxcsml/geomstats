@@ -214,19 +214,19 @@ class HessianPolytopeMetric(EuclideanMetric):
     def metric_matrix(self, x, t, z, eps=1e-6):
         # def calc(x):
         res = gs.maximum(self.b[:, None] - self.T @ x.T, eps)
-        return self.T.T @ gs.diag(res**-2) @ self.T
+        return self.T @ gs.diag(res**-2) @ self.T.T
         # return jax.vmap(calc)(x)
 
     def metric_inverse_matrix(self, x, t, z, eps=1e-6):
         # def calc(x):
         res = gs.maximum(self.b[:, None] - self.T @ x.T, eps)
-        return gs.linalg.inv(self.T.T @ gs.diag(res**-2) @ self.T)
+        return gs.linalg.inv(self.T @ gs.diag(res**-2) @ self.T.T)
         # return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x, t, z, eps=1e-6):
         # def calc(x):
         res = gs.maximum(self.b[:, None] - self.T @ x.T, eps)
-        return self.T.T @ gs.diag(res**(-1))
+        return self.T @ gs.diag(res**(-1))
         # return jax.vmap(calc)(x)
 
     def exp(self, tangent_vec, base_point, eps=1e-8, **kwargs):
