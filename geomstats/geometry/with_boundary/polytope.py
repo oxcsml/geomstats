@@ -229,6 +229,12 @@ class HessianPolytopeMetric(EuclideanMetric):
             return gs.linalg.cholesky(gs.linalg.inv(self.T.T @ gs.diag(res**-2) @ self.T))
         return jax.vmap(calc)(x)
 
+    def grad_logdet_metric_matrix(self, x, t, z, eps=1e-6):
+        def calc(x):
+            res = gs.maximum(self.b - self.T @ x.T, eps)
+            return -1/2 * gs.linalg.slogdet(self.T.T @ gs.diag(res**-2) @ self.T)[1]
+        return jax.vmap(jax.grad(calc))(x)
+
     def exp(self, tangent_vec, base_point, eps=1e-8, **kwargs):
         base_point += tangent_vec
         diff = (self.T @ base_point.T - self.b[:, None])
