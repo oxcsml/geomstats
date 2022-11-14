@@ -56,11 +56,11 @@ class Euclidean(VectorSpace):
             Group exponential.
         """
         # if not self.belongs(tangent_vec):
-            # raise ValueError("The update must be of the same dimension")
+        # raise ValueError("The update must be of the same dimension")
         return tangent_vec + base_point
 
     def eigen_generators(self, x):
-       return gs.expand_dims(gs.eye(self.dim), 0)
+        return gs.expand_dims(gs.eye(self.dim), 0)
 
 
 class EuclideanMetric(RiemannianMetric):

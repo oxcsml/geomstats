@@ -347,6 +347,10 @@ class ProductSameManifold(Manifold):
             dim=self.dim, metric=metric, default_point_type=default_point_type, **kwargs
         )
 
+    @property
+    def identity(self):
+        return gs.repeat(gs.expand_dims(self.manifold.identity, -2), self.mul, -2)
+
     def _iterate_over_manifolds(self, func, kwargs, in_axes=-2, out_axes=-2):
         method = getattr(self.manifold, func)
         in_axes = []
