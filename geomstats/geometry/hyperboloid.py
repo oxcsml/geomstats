@@ -258,7 +258,9 @@ class Hyperboloid(_Hyperbolic, EmbeddedManifold):
             Tangent vector at base point.
         """
         state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.dim))
-        ambiant_noise = gs.concatenate([gs.zeros((n_samples, 1)), ambiant_noise], axis=-1)
+        ambiant_noise = gs.concatenate(
+            [gs.zeros((n_samples, 1)), ambiant_noise], axis=-1
+        )
         ambiant_noise = self.metric.transpfrom0(base_point, ambiant_noise)
 
         return state, ambiant_noise
@@ -412,8 +414,12 @@ class HyperboloidMetric(HyperbolicMetric):
         """
         angle = self.dist(base_point, point) / self.scale
 
-        coef_1_ = utils.taylor_exp_even_func(angle**2, utils.inv_sinch_close_0, order=4)
-        coef_2_ = utils.taylor_exp_even_func(angle**2, utils.inv_tanh_close_0, order=4)
+        coef_1_ = utils.taylor_exp_even_func(
+            angle**2, utils.inv_sinch_close_0, order=4
+        )
+        coef_2_ = utils.taylor_exp_even_func(
+            angle**2, utils.inv_tanh_close_0, order=4
+        )
 
         log_term_1 = gs.einsum("...,...j->...j", coef_1_, point)
         log_term_2 = -gs.einsum("...,...j->...j", coef_2_, base_point)
@@ -440,7 +446,7 @@ class HyperboloidMetric(HyperbolicMetric):
         inner_prod = self.embedding_metric.inner_product(point_a, point_b)
 
         cosh_angle = -inner_prod / gs.sqrt(sq_norm_a * sq_norm_b)
-        cosh_angle = gs.clip(cosh_angle, 1.0, 1e24)
+        cosh_angle = gs.clip(cosh_angle, 1.0 + 1e-7, 1e24)
 
         dist = gs.arccosh(cosh_angle)
         dist *= self.scale

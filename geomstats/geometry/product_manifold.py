@@ -302,7 +302,9 @@ class ProductManifold(Manifold):
         else:
             is_tangent = gs.stack(
                 [
-                    space.is_tangent(vector[..., i, :], base_point[..., i, :], atol=atol)
+                    space.is_tangent(
+                        vector[..., i, :], base_point[..., i, :], atol=atol
+                    )
                     for i, space in enumerate(self.manifolds)
                 ],
                 axis=-1,
@@ -330,7 +332,9 @@ from jax.scipy.linalg import block_diag
 
 
 class ProductSameManifold(Manifold):
-    def __init__(self, manifold, mul, metric=None, default_point_type="vector", **kwargs):
+    def __init__(
+        self, manifold, mul, metric=None, default_point_type="vector", **kwargs
+    ):
         self.manifold = manifold
         self.mul = mul
         self.dim = self.mul * self.manifold.dim
@@ -402,13 +406,21 @@ class ProductSameManifold(Manifold):
         )
         return samples
 
+    def identity(self):
+        iden = self._iterate_over_manifolds(
+            "identity",
+        )
+        return iden
+
     def random_walk(self, rng, x, t):
         if self.mul > 1:
             new_state = jax.random.split(rng, num=self.mul)
             rng = new_state.reshape((-1))
         if isinstance(x, jax.numpy.ndarray):
             t = t[:, None] * jnp.ones(self.mul)[None, :]
-        walks = self._iterate_over_manifolds("random_walk", {"rng": rng, "x": x, "t": t})
+        walks = self._iterate_over_manifolds(
+            "random_walk", {"rng": rng, "x": x, "t": t}
+        )
         return walks
 
     def _log_heat_kernel(self, x0, x, t, n_max):
