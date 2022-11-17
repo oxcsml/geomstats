@@ -2,7 +2,7 @@
 from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
 import jax
 import numpy as np
-import jax.numpy as gs
+import geomstats.backend as gs
 from scipy.optimize import linprog
 
 from diffrax.misc import bounded_while_loop
@@ -11,11 +11,15 @@ from diffrax.misc import bounded_while_loop
 # you dont need to expand dims and you can handle
 # different b with the same T matrix: this is nice
 # because in our setting the T matrix is always the
-# same; all that changes is the b values! 
+# same; all that changes is the b values!
 
 
 def stable_div(num, den, eps=1e-10):
-    return gs.sign(num) * gs.sign(den) * gs.exp(gs.log(gs.abs(num) + eps) - gs.log(gs.abs(den) + eps))
+    return (
+        gs.sign(num)
+        * gs.sign(den)
+        * gs.exp(gs.log(gs.abs(num) + eps) - gs.log(gs.abs(den) + eps))
+    )
 
 
 def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
@@ -47,7 +51,7 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
         rp, s, sr = val
-        sr_mask = (sr > 0)
+        sr_mask = sr > 0
         num, den = T @ rp.T - b[:, None], T @ s.T
         scale = -stable_div(num, den) * sr_mask
         scale = gs.clip(scale, -max_val, max_val)
@@ -67,7 +71,7 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
         # have magnitude left in their step length
         a = gs.maximum(gs.minimum(sr, a_max), 0)
         rp = rp + a[:, None] * s
-        diff = (T @ rp.T - b[:, None])
+        diff = T @ rp.T - b[:, None]
         idx = diff >= -eps2
         rp = rp + (T.T @ (-(gs.abs(diff) + eps) * idx)).T
         # this is just a test to ensure we are
@@ -97,16 +101,11 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
         # vector
         sr = sr - a
         return rp, s, sr
-    
+
     sr = gs.sqrt(gs.sum(sn**2, axis=-1))
     sn = sn / sr[:, None]
-    rp, s, sr = bounded_while_loop(
-        reflect_cond,
-        reflect_body,
-        (r, sn, sr),
-        max_iter
-    )
-    
+    rp, s, sr = bounded_while_loop(reflect_cond, reflect_body, (r, sn, sr), max_iter)
+
     return rp
 
 
@@ -122,15 +121,19 @@ class Polytope(Euclidean):
         Dimension of the Euclidean space.
     """
 
-    def __init__(self, T=None, b=None, npz=None, metric=None, metric_type="Reflected", **kwargs):
+    def __init__(
+        self, T=None, b=None, npz=None, metric=None, metric_type="Reflected", **kwargs
+    ):
         if npz is not None:
             data = np.load(npz)
-            self.T, self.b = gs.array(data['T']), gs.array(data['b'])
+            self.T, self.b = gs.array(data["T"]), gs.array(data["b"])
         elif T is not None and b is not None:
             self.T, self.b = gs.array(T), gs.array(b)
         else:
-            raise ValueError("You need either the inequality matrices or "
-                             "an archive pointing to them")
+            raise ValueError(
+                "You need either the inequality matrices or "
+                "an archive pointing to them"
+            )
         dim = self.T.shape[1]
         if metric is None:
             if metric_type == "Reflected":
@@ -145,33 +148,53 @@ class Polytope(Euclidean):
         # used to compute a point in the interior of the polytope
         # which we can do random walks from to generate random samples
         c = np.zeros((self.T.shape[1],))
-        res = linprog(
-            c, 
-            A_ub=self.T, b_ub=self.b[:, None], 
-            bounds=(None, None)
-        )
+        res = linprog(c, A_ub=self.T, b_ub=self.b[:, None], bounds=(None, None))
         self.center = res.x
 
     def exp(self, tangent_vec, base_point=None):
         return self.metric.exp(tangent_vec, base_point)
-    
+
     @property
     def log_volume(self):
         return self.metric.log_volume
-    
-    def random_uniform(self, state, n_samples=1, step_size=1., num_steps=10_000):
+
+    def random_uniform(self, state, n_samples=1, step_size=1.0, num_steps=10_000):
         def walk(_, carry):
             rng, pos = carry
-            rng, next_rng = jax.random.split(rng)  
+            rng, next_rng = jax.random.split(rng)
             samples = jax.random.normal(rng, shape=(n_samples, pos.shape[1]))
             step = step_size * samples
             return next_rng, reflect(step, pos, self.T, self.b)
-        
+
         init = gs.tile(self.center[None, :], (n_samples, 1))
-        _, samples = jax.lax.fori_loop(
-            0, num_steps, walk, (state, init)
-        )
+        _, samples = jax.lax.fori_loop(0, num_steps, walk, (state, init))
         return samples
+
+    def random_normal_tangent(self, state, base_point, n_samples=1):
+        """Sample in the tangent space from the standard normal distribution.
+
+        Parameters
+        ----------
+        base_point : array-like, shape=[..., dim]
+            Point on the manifold.
+        n_samples : int
+            Number of samples.
+            Optional, default: 1.
+
+        Returns
+        -------
+        tangent_vec : array-like, shape=[..., dim]
+            Tangent vector at base point.
+        """
+        state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.dim))
+        inv_metric = self.metric.metric_inverse_matrix(base_point)
+        chart_noise = gs.einsum(
+            "...ij,...j->...i",
+            gs.linalg.cholesky(inv_metric),
+            ambiant_noise,
+        )
+
+        return state, chart_noise
 
     def random_walk(self, rng, x, t):
         rng, z = self.random_normal_tangent(
@@ -182,11 +205,11 @@ class Polytope(Euclidean):
         tangent_vector = gs.sqrt(t) * z
         samples = self.exp(tangent_vec=tangent_vector, base_point=x)
         return samples
-        
+
     def belongs(self, x, atol=1e-12):
         return self.T @ x.T <= self.b[:, None] + atol
-        
-        
+
+
 class ReflectedPolytopeMetric(EuclideanMetric):
     def __init__(self, T, b, default_point_type="vector", **kwargs):
         self.T, self.b = T, b
@@ -200,7 +223,9 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         base_point = base_point.reshape(-1, base_shape[-1])
         tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
         exp_point = reflect(base_point, tangent_vec, self.T, self.b)
-        return exp_point.reshape(base_shape) #reflect(base_point, tangent_vec, self.T, self.b)
+        return exp_point.reshape(
+            base_shape
+        )  # reflect(base_point, tangent_vec, self.T, self.b)
 
 
 class HessianPolytopeMetric(EuclideanMetric):
@@ -211,32 +236,45 @@ class HessianPolytopeMetric(EuclideanMetric):
             dim=dim, default_point_type=default_point_type
         )
 
-    def metric_matrix(self, x, t, z, eps=1e-6):
+    def metric_matrix(self, x, eps=1e-6):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, eps)
-            return self.T.T @ gs.diag(res**-2) @ self.T
+            return self.T.T @ jax.numpy.diag(res**-2) @ self.T
+
         return jax.vmap(calc)(x)
 
-    def metric_inverse_matrix(self, x, t, z, eps=1e-6):
+    def metric_inverse_matrix(self, x, eps=1e-6):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, eps)
-            return gs.linalg.inv(self.T.T @ gs.diag(res**-2) @ self.T)
+            return gs.linalg.inv(self.T.T @ jax.numpy.diag(res**-2) @ self.T)
+
         return jax.vmap(calc)(x)
 
-    def metric_inverse_matrix_sqrt(self, x, t, z, eps=1e-6):
+    def metric_inverse_matrix_sqrt(self, x, eps=1e-6):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, eps)
-            return gs.linalg.cholesky(gs.linalg.inv(self.T.T @ gs.diag(res**-2) @ self.T))
+            return gs.linalg.cholesky(
+                gs.linalg.inv(self.T.T @ jax.numpy.diag(res**-2) @ self.T)
+            )
+
         return jax.vmap(calc)(x)
 
-    def grad_logdet_metric_matrix(self, x, t, z, eps=1e-6):
+    def grad_logdet_metric_matrix(self, x, eps=1e-6):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, eps)
-            return -1/2 * gs.linalg.slogdet(self.T.T @ gs.diag(res**-2) @ self.T)[1]
+            return (
+                -1
+                / 2
+                * jax.numpy.linalg.slogdet(
+                    self.T.T @ jax.numpy.diag(res**-2) @ self.T
+                )[1]
+            )
+
         return jax.vmap(jax.grad(calc))(x)
 
     def exp(self, tangent_vec, base_point, eps=1e-8, **kwargs):
-        base_point += tangent_vec
-        diff = (self.T @ base_point.T - self.b[:, None])
+        """Use a retraction instead of the true exponential map."""
+        base_point += tangent_vec  # in chart tangent space
+        diff = self.T @ base_point.T - self.b[:, None]
         idx = diff >= 0
         return base_point + (self.T.T @ (-(gs.abs(diff) + eps) * idx)).T

@@ -29,13 +29,13 @@ def _is_symmetric(x, tol=1e-12):
 
 
 def expm(x):
-     x_new = to_ndarray(x, to_ndim=3)
-     result = vmap(sp_expm)(x_new)
-     return result[0] if len(result) == 1 else result
+    x_new = to_ndarray(x, to_ndim=3)
+    result = vmap(sp_expm)(x_new)
+    return result[0] if len(result) == 1 else result
 
 
-logm_prim = core.Primitive('logm')
-logm_prim.def_impl(_np.vectorize(scipy.linalg.logm, signature='(m,n)->(m,n)'))
+logm_prim = core.Primitive("logm")
+logm_prim.def_impl(_np.vectorize(scipy.linalg.logm, signature="(m,n)->(m,n)"))
 logm_prim.def_abstract_eval(lambda x: abstract_arrays.ShapedArray(x.shape, x.dtype))
 
 
@@ -63,5 +63,4 @@ def sqrtm(x):
 
 
 def qr(*args, **kwargs):
-    return np.vectorize(np.linalg.qr,
-                         signature='(n,m)->(n,k),(k,m)')(*args, **kwargs)
+    return np.vectorize(np.linalg.qr, signature="(n,m)->(n,k),(k,m)")(*args, **kwargs)
