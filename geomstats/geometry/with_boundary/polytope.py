@@ -278,7 +278,7 @@ class HessianPolytopeMetric(EuclideanMetric):
         base_point += tangent_vec  # in chart tangent space
         X = cp.Variable(base_point.shape)
         problem = cp.Problem(
-            cp.Minimize(cp.sum_squares(X - base_point)),
+            cp.Minimize(cp.sum_squares(X - np.array(base_point))),
             [self.T @ X.T <= self.b[:, None]]
         )
         problem.solve()
