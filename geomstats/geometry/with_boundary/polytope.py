@@ -6,6 +6,7 @@ import geomstats.backend as gs
 from scipy.optimize import linprog
 
 from diffrax.misc import bounded_while_loop
+import cvxpy as cp
 
 # todo: if b is always either M, 1 or M, N then
 # you dont need to expand dims and you can handle
@@ -272,9 +273,13 @@ class HessianPolytopeMetric(EuclideanMetric):
 
         return jax.vmap(jax.grad(calc))(x)
 
-    def exp(self, tangent_vec, base_point, eps=1e-8, **kwargs):
+    def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
         base_point += tangent_vec  # in chart tangent space
-        diff = self.T @ base_point.T - self.b[:, None]
-        idx = diff >= 0
-        return base_point + (self.T.T @ (-(gs.abs(diff) + eps) * idx)).T
+        X = cp.Variable(base_point.shape)
+        problem = cp.Problem(
+            cp.Minimize(cp.sum_squares(X - base_point)),
+            [self.T @ X.T <= self.b[:, None]]
+        )
+        problem.solve()
+        return X.value()
