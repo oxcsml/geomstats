@@ -8,6 +8,27 @@ from scipy.optimize import linprog
 from diffrax.misc import bounded_while_loop
 import cvxpy as cp
 
+
+
+import cvxpy as cp
+import jax.experimental.host_callback as hcb
+
+def proj(inp):
+    A, b, base_point = inp
+    X = cp.Variable(base_point.shape)
+    problem = cp.Problem(
+        cp.Minimize(cp.sum_squares(X - base_point)),
+        [A @ X.T <= b[:, None]]
+    )
+    problem.solve()
+    return X.value
+
+def device_proj(A, b, x):
+    return hcb.call(
+        proj, (A, b, x),
+        result_shape=jax.ShapeDtypeStruct(x.shape, x.dtype)
+    )
+
 # todo: if b is always either M, 1 or M, N then
 # you dont need to expand dims and you can handle
 # different b with the same T matrix: this is nice
@@ -276,10 +297,4 @@ class HessianPolytopeMetric(EuclideanMetric):
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
         base_point += tangent_vec  # in chart tangent space
-        X = cp.Variable(base_point.shape)
-        problem = cp.Problem(
-            cp.Minimize(cp.sum_squares(X - np.array(base_point))),
-            [self.T @ X.T <= self.b[:, None]]
-        )
-        problem.solve()
-        return X.value()
+        return device_proj(self.T, self.b, base_point)
