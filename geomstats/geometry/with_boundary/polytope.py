@@ -298,3 +298,35 @@ class HessianPolytopeMetric(EuclideanMetric):
         """Use a retraction instead of the true exponential map."""
         base_point += tangent_vec  # in chart tangent space
         return device_proj(self.T, self.b, base_point)
+
+
+class HessianCubeMetric(HessianPolytopeMetric):
+    def __init__(self, T, b):
+        super(HessianPolytopeMetric, self).__init__(
+            T=T, b=b
+        )
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        """Use a retraction instead of the true exponential map."""
+        base_point += tangent_vec  # in chart tangent space
+        return gs.clip(base_point, a_min=0, a_max=1)
+
+
+class HessianTriangleMetric(HessianPolytopeMetric):
+    def __init__(self, T, b):
+        super(HessianTriangleMetric, self).__init__(
+            T=T, b=b
+        )
+        self.shift = 1 / T.shape[1] * gs.ones(T.shape[1])
+        normal_vec = gs.ones((T.shape[1], 1))
+        self.proj = normal_vec @ normal_vec.T / (normal_vec.T @ normal_vec)
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        """Use a retraction instead of the true exponential map."""
+        base_point += tangent_vec
+        base_point = gs.maximum(base_point, 0)
+        mask = self.T[-1, :] @ base_point.T > self.b[-1]
+        base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
+        base_point = gs.clip(base_point, 0, 1)
+        return base_point
+
