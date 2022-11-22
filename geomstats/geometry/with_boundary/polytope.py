@@ -2,7 +2,7 @@
 from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
 import jax
 import numpy as np
-import geomstats.backend as gs
+import jax.numpy as gs
 from scipy.optimize import linprog
 
 from diffrax.misc import bounded_while_loop
