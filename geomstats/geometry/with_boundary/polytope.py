@@ -5,8 +5,6 @@ import numpy as np
 import jax.numpy as gs
 import geomstats.backend as bs
 
-gs.random = bs.random
-
 from scipy.optimize import linprog
 
 from diffrax.misc import bounded_while_loop
@@ -48,7 +46,7 @@ def stable_div(num, den, eps=1e-10):
     )
 
 
-def reflect(r, sn, T, b, eps=1e-6, eps2=1e-10, max_val=1e10, max_iter=100_000):
+def reflect(r, sn, T, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -212,7 +210,7 @@ class Polytope(Euclidean):
         tangent_vec : array-like, shape=[..., dim]
             Tangent vector at base point.
         """
-        state, ambiant_noise = gs.random.normal(state=state, size=(n_samples, self.dim))
+        state, ambiant_noise = bs.random.normal(state=state, size=(n_samples, self.dim))
         inv_metric = self.metric.metric_inverse_matrix(base_point)
         chart_noise = gs.einsum(
             "...ij,...j->...i",
