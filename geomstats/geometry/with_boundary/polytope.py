@@ -8,9 +8,6 @@ import geomstats.backend as bs
 from scipy.optimize import linprog
 
 from diffrax.misc import bounded_while_loop
-import cvxpy as cp
-
-
 
 import cvxpy as cp
 import jax.experimental.host_callback as hcb
@@ -171,9 +168,16 @@ class Polytope(Euclidean):
         self.metric = metric
         # used to compute a point in the interior of the polytope
         # which we can do random walks from to generate random samples
-        c = np.zeros((self.T.shape[1],))
-        res = linprog(c, A_ub=self.T, b_ub=self.b[:, None], bounds=(None, None))
-        self.center = res.x
+        xc = cp.Variable(T.shape[1])
+        r = cp.Variable()
+
+        problem = cp.Problem(
+            cp.Maximize(r),
+            [T @ xc.T + r * cp.norm(T, axis=1) <= b, r >= 0]
+        )
+        problem.solve()
+
+        self.center = xc.value
 
     def exp(self, tangent_vec, base_point=None):
         return self.metric.exp(tangent_vec, base_point)
