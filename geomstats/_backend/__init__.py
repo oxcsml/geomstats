@@ -247,7 +247,7 @@ class BackendImporter:
         _BACKEND = os.environ.get("GEOMSTATS_BACKEND")
         os.environ['JAX_ENABLE_X64'] = 'True'
         if _BACKEND is None:
-            os.environ["GEOMSTATS_BACKEND"] = _BACKEND = "numpy"
+            os.environ["GEOMSTATS_BACKEND"] = _BACKEND = "jax"
 
         module = self._create_backend_module(_BACKEND)
         module.__loader__ = self
