@@ -173,7 +173,7 @@ class Polytope(Euclidean):
 
         problem = cp.Problem(
             cp.Maximize(r),
-            [T @ xc.T + r * cp.norm(T, axis=1) <= b, r >= 0]
+            [self.T @ xc.T + r * cp.norm(self.T, axis=1) <= self.b, r >= 0]
         )
         problem.solve()
 
