@@ -302,7 +302,7 @@ class HessianPolytopeMetric(EuclideanMetric):
 
 class HessianCubeMetric(HessianPolytopeMetric):
     def __init__(self, T, b):
-        super(HessianPolytopeMetric, self).__init__(
+        super(HessianCubeMetric, self).__init__(
             T=T, b=b
         )
 
@@ -329,4 +329,3 @@ class HessianTriangleMetric(HessianPolytopeMetric):
         base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
         base_point = gs.clip(base_point, 0, 1)
         return base_point
-
