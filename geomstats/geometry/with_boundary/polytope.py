@@ -168,7 +168,7 @@ class Polytope(Euclidean):
         self.metric = metric
         # used to compute a point in the interior of the polytope
         # which we can do random walks from to generate random samples
-        xc = cp.Variable(T.shape[1])
+        xc = cp.Variable(self.T.shape[1])
         r = cp.Variable()
 
         problem = cp.Problem(
