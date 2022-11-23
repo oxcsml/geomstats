@@ -322,7 +322,7 @@ class HessianCubeMetric(HessianPolytopeMetric):
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
         base_point += tangent_vec  # in chart tangent space
-        return gs.clip(base_point, a_min=0, a_max=1)
+        return gs.clip(base_point, a_min=-0.1, a_max=0.1)
 
 
 class HessianTriangleMetric(HessianPolytopeMetric):
