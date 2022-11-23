@@ -236,6 +236,7 @@ class Polytope(Euclidean):
         return state, chart_noise
 
     def random_walk(self, rng, x, t):
+        return None
         rng, z = self.random_normal_tangent(
             state=rng, base_point=x, n_samples=x.shape[0]
         )
