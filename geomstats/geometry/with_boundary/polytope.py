@@ -160,7 +160,14 @@ class Polytope(Euclidean):
             if metric_type == "Reflected":
                 metric = ReflectedPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
-                metric = HessianPolytopeMetric(self.T, self.b)
+                if "cube" in npz:
+                    metric = HessianCubeMetric(self.T, self.b)
+                    print("Using cube metric")
+                elif "dirichlet" in npz:
+                    metric = HessianTriangleMetric(self.T, self.b)
+                    print("Using triangle metric")
+                else:
+                    metric = HessianPolytopeMetric(self.T, self.b)
             else:
                 raise NotImplementedError
 
