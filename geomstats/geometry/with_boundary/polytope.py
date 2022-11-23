@@ -143,11 +143,15 @@ class Polytope(Euclidean):
     """
 
     def __init__(
-        self, T=None, b=None, npz=None, metric=None, metric_type="Reflected", **kwargs
+        self, T=None, b=None, npz=None, metric=None, proj_type=None, metric_type="Reflected", **kwargs
     ):
         if npz is not None:
             data = np.load(npz)
             self.T, self.b = gs.array(data["T"]), gs.array(data["b"])
+            if "cube" in npz:
+                proj_type = "cube"
+            elif "dirichlet" in npz:
+                proj_type = "triangle"
         elif T is not None and b is not None:
             self.T, self.b = gs.array(T), gs.array(b)
         else:
@@ -160,10 +164,10 @@ class Polytope(Euclidean):
             if metric_type == "Reflected":
                 metric = ReflectedPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
-                if "cube" in npz:
+                if proj_type == "cube":
                     metric = HessianCubeMetric(self.T, self.b)
                     print("Using cube metric")
-                elif "dirichlet" in npz:
+                elif proj_type == "triangle":
                     metric = HessianTriangleMetric(self.T, self.b)
                     print("Using triangle metric")
                 else:
