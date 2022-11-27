@@ -228,13 +228,7 @@ class Polytope(Manifold):
             Tangent vector at base point.
         """
         state, ambiant_noise = bs.random.normal(state=state, size=(n_samples, self.dim))
-        inv_metric = self.metric.metric_inverse_matrix(base_point)
-        chart_noise = gs.einsum(
-            "...ij,...j->...i",
-            gs.linalg.cholesky(inv_metric),
-            ambiant_noise,
-        )
-
+        chart_noise = self.to_tangent(ambiant_noise, base_point)
         return state, chart_noise
 
     def random_walk(self, rng, x, t):
@@ -250,6 +244,21 @@ class Polytope(Manifold):
 
     def belongs(self, x, atol=1e-12):
         return self.T @ x.T <= self.b[:, None] + atol
+
+    def is_tangent(self, x):
+        return True
+
+    def to_tangent(self, vector, base_point):
+        inv_metric = self.metric.metric_inverse_matrix(base_point)
+        tangent_vector = gs.einsum(
+            "...ij,...j->...i",
+            gs.linalg.cholesky(inv_metric),
+            vector,
+        )
+        return tangent_vector
+
+    def random_point(self, rng):
+        return self.random_uniform(rng)
 
 
 class ReflectedPolytopeMetric(EuclideanMetric):
