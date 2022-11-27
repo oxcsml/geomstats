@@ -1,5 +1,6 @@
 """Euclidean space."""
-from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
+from geomstats.geometry.euclidean import EuclideanMetric, Euclidean, Manifold
+from geomstats.geometry.riemannian_metric import RiemannianMetric
 import jax
 import numpy as np
 import jax.numpy as gs
@@ -130,7 +131,7 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000):
     return rp
 
 
-class Polytope(Euclidean):
+class Polytope(Manifold):
     """Class for Euclidean spaces.
 
     By definition, a Euclidean space is a vector space of a given
@@ -268,7 +269,7 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         )  # reflect(base_point, tangent_vec, self.T, self.b)
 
 
-class HessianPolytopeMetric(EuclideanMetric):
+class HessianPolytopeMetric(RiemannianMetric):
     def __init__(self, T, b, default_point_type="vector", **kwargs):
         self.T, self.b = T, b
         dim = self.T.shape[1]
@@ -283,34 +284,14 @@ class HessianPolytopeMetric(EuclideanMetric):
 
         return jax.vmap(calc)(x)
 
-    def metric_inverse_matrix(self, x, eps=1e-6):
-        def calc(x):
-            res = gs.maximum(self.b - self.T @ x.T, eps)
-            return gs.linalg.inv(self.T.T @ jax.numpy.diag(res**-2) @ self.T)
-
-        return jax.vmap(calc)(x)
-
     def metric_inverse_matrix_sqrt(self, x, eps=1e-6):
-        def calc(x):
-            res = gs.maximum(self.b - self.T @ x.T, eps)
-            return gs.linalg.cholesky(
-                gs.linalg.inv(self.T.T @ jax.numpy.diag(res**-2) @ self.T)
-            )
+        return gs.linalg.cholesky(self.metric_inverse_matrix(x))
 
-        return jax.vmap(calc)(x)
+    def lambda_x(self, x):
+        return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
 
     def grad_logdet_metric_matrix(self, x, eps=1e-6):
-        def calc(x):
-            res = gs.maximum(self.b - self.T @ x.T, eps)
-            return (
-                -1
-                / 2
-                * jax.numpy.linalg.slogdet(
-                    self.T.T @ jax.numpy.diag(res**-2) @ self.T
-                )[1]
-            )
-
-        return jax.vmap(jax.grad(calc))(x)
+        return jax.grad(self.lambda_x)(x)
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
