@@ -260,6 +260,10 @@ class Polytope(Manifold):
     def random_point(self, rng):
         return self.random_uniform(rng)
 
+    @property
+    def get_identity(self, point_type=None):
+        return gs.zeros(self.dim)
+
 
 class ReflectedPolytopeMetric(EuclideanMetric):
     def __init__(self, T, b, default_point_type="vector", **kwargs):
