@@ -261,7 +261,7 @@ class Polytope(Manifold):
         return self.random_uniform(rng)
 
     @property
-    def get_identity(self, point_type=None):
+    def identity(self):
         return gs.zeros(self.dim)
 
 
