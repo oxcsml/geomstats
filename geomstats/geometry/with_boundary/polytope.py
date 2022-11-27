@@ -197,7 +197,9 @@ class Polytope(Manifold):
 
     @property
     def log_volume(self):
-        return self.metric.log_volume
+        # TODO: this could be computed using random uniform samples for the
+        # volume of the polytope. Unclear how to implement for hessian/logbarrier.
+        return self.dim
 
     def random_uniform(self, state, n_samples=1, step_size=1.0, num_steps=10_000):
         def walk(_, carry):
