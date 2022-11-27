@@ -1,6 +1,7 @@
 """Euclidean space."""
-from geomstats.geometry.euclidean import EuclideanMetric, Euclidean, Manifold
+from geomstats.geometry.manifold import Manifold
 from geomstats.geometry.riemannian_metric import RiemannianMetric
+from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
 import jax
 import numpy as np
 import jax.numpy as gs
