@@ -300,13 +300,13 @@ class HessianPolytopeMetric(RiemannianMetric):
 
         return jax.vmap(calc)(x)
 
-    def metric_inverse_matrix_sqrt(self, x, eps=1e-6):
+    def metric_inverse_matrix_sqrt(self, x):
         return gs.linalg.cholesky(self.metric_inverse_matrix(x))
 
     def lambda_x(self, x):
         return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
 
-    def grad_logdet_metric_matrix(self, x, eps=1e-6):
+    def grad_logdet_metric_matrix(self, x):
         return jax.grad(self.lambda_x)(x)
 
     def exp(self, tangent_vec, base_point, **kwargs):
@@ -328,11 +328,11 @@ class HessianCubeMetric(HessianPolytopeMetric):
 
 
 class HessianTriangleMetric(HessianPolytopeMetric):
-    def __init__(self, T, b):
+    def __init__(self, T, b, eps=1e-6):
         super(HessianTriangleMetric, self).__init__(
             T=T, b=b
         )
-        self.shift = 1 / T.shape[1] * gs.ones(T.shape[1])
+        self.shift = (1 / T.shape[1] * gs.ones(T.shape[1])) - eps
         normal_vec = gs.ones((T.shape[1], 1))
         self.proj = normal_vec @ normal_vec.T / (normal_vec.T @ normal_vec)
 
