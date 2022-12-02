@@ -293,7 +293,7 @@ class HessianPolytopeMetric(RiemannianMetric):
             dim=dim, default_point_type=default_point_type
         )
 
-    def metric_matrix(self, x, eps=1e-8):
+    def metric_matrix(self, x, eps=1e-6):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, eps)
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
@@ -328,12 +328,11 @@ class HessianCubeMetric(HessianPolytopeMetric):
 
 
 class HessianTriangleMetric(HessianPolytopeMetric):
-    def __init__(self, T, b, eps=1e-6):
+    def __init__(self, T, b):
         super(HessianTriangleMetric, self).__init__(
             T=T, b=b
         )
-        self.eps = eps
-        self.shift = (1 / T.shape[1] * gs.ones(T.shape[1])) - self.eps
+        self.shift = (1 / T.shape[1] * gs.ones(T.shape[1]))
         normal_vec = gs.ones((T.shape[1], 1))
         self.proj = normal_vec @ normal_vec.T / (normal_vec.T @ normal_vec)
 
@@ -343,5 +342,5 @@ class HessianTriangleMetric(HessianPolytopeMetric):
         base_point = gs.maximum(base_point, 0)
         mask = self.T[-1, :] @ base_point.T > self.b[-1]
         base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
-        base_point = gs.clip(base_point, self.eps, 1 - self.eps)
+        base_point = gs.clip(base_point, 0, 1)
         return base_point
