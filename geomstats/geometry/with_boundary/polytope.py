@@ -145,7 +145,7 @@ class Polytope(Manifold):
     """
 
     def __init__(
-        self, T=None, b=None, npz=None, metric=None, proj_type=None, metric_type="Reflected", **kwargs
+        self, T=None, b=None, npz=None, metric=None, proj_type=None, metric_type="Reflected", eps=1e-6, **kwargs
     ):
         if npz is not None:
             data = np.load(npz)
@@ -167,13 +167,13 @@ class Polytope(Manifold):
                 metric = ReflectedPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
                 if proj_type == "cube":
-                    metric = HessianCubeMetric(self.T, self.b)
+                    metric = HessianCubeMetric(self.T, self.b, eps=eps)
                     print("Using cube metric")
                 elif proj_type == "triangle":
-                    metric = HessianTriangleMetric(self.T, self.b)
+                    metric = HessianTriangleMetric(self.T, self.b, eps=eps)
                     print("Using triangle metric")
                 else:
-                    metric = HessianPolytopeMetric(self.T, self.b)
+                    metric = HessianPolytopeMetric(self.T, self.b, eps=eps)
             else:
                 raise NotImplementedError
 
@@ -286,16 +286,17 @@ class ReflectedPolytopeMetric(EuclideanMetric):
 
 
 class HessianPolytopeMetric(RiemannianMetric):
-    def __init__(self, T, b, default_point_type="vector", **kwargs):
+    def __init__(self, T, b, eps=1e-6, default_point_type="vector", **kwargs):
         self.T, self.b = T, b
+        self.eps = eps
         dim = self.T.shape[1]
         super(HessianPolytopeMetric, self).__init__(
             dim=dim, default_point_type=default_point_type
         )
 
-    def metric_matrix(self, x, eps=1e-6):
+    def metric_matrix(self, x):
         def calc(x):
-            res = gs.maximum(self.b - self.T @ x.T, eps)
+            res = gs.maximum(self.b - self.T @ x.T, self.eps)
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
 
         return jax.vmap(calc)(x)
@@ -316,9 +317,9 @@ class HessianPolytopeMetric(RiemannianMetric):
 
 
 class HessianCubeMetric(HessianPolytopeMetric):
-    def __init__(self, T, b):
+    def __init__(self, T, b, eps=1e-6):
         super(HessianCubeMetric, self).__init__(
-            T=T, b=b
+            T=T, b=b, eps=eps
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
@@ -328,9 +329,9 @@ class HessianCubeMetric(HessianPolytopeMetric):
 
 
 class HessianTriangleMetric(HessianPolytopeMetric):
-    def __init__(self, T, b):
+    def __init__(self, T, b, eps=1e-6):
         super(HessianTriangleMetric, self).__init__(
-            T=T, b=b
+            T=T, b=b, eps=eps
         )
         self.shift = (1 / T.shape[1] * gs.ones(T.shape[1]))
         normal_vec = gs.ones((T.shape[1], 1))
