@@ -1,5 +1,5 @@
 import jax.numpy as gs
-
+import numpy as np
 
 def to_params(x):
     """
@@ -74,8 +74,8 @@ def to_euclidean(r, tau, l, x0, xn1, xn):
 
 def get_constraints(l, D):
     m = l.shape[0] + 2
-    T = gs.zeros((3 * m - 8, m - 3))
-    b = gs.zeros((3 * m - 8))
+    T = np.zeros((3 * m - 8, m - 3))
+    b = np.zeros((3 * m - 8))
     T[0, 0], b[0] = 1, l[0] + l[1]
     T[1, 0], b[1] = -1, -gs.abs(l[0] - l[1])
     i = 2
