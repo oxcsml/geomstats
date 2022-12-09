@@ -340,8 +340,8 @@ class HessianTriangleMetric(HessianPolytopeMetric):
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
         base_point += tangent_vec
-        base_point = gs.maximum(base_point, self.eps)
+        base_point = gs.maximum(base_point, 0)
         mask = self.T[-1, :] @ base_point.T > self.b[-1]
         base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
-        base_point = gs.clip(base_point, self.eps, 1-self.eps)
+        base_point = gs.clip(base_point, 0, 1)
         return base_point
