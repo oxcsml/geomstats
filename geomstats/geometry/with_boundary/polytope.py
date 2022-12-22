@@ -7,8 +7,6 @@ import numpy as np
 import jax.numpy as gs
 import geomstats.backend as bs
 
-from scipy.optimize import linprog
-
 from diffrax.misc import bounded_while_loop
 
 import cvxpy as cp
@@ -133,15 +131,8 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000):
 
 
 class Polytope(Manifold):
-    """Class for Euclidean spaces.
+    """
 
-    By definition, a Euclidean space is a vector space of a given
-    dimension, equipped with a Euclidean metric.
-
-    Parameters
-    ----------
-    dim : int
-        Dimension of the Euclidean space.
     """
 
     def __init__(
@@ -251,13 +242,7 @@ class Polytope(Manifold):
         return True
 
     def to_tangent(self, vector, base_point):
-        inv_metric = self.metric.metric_inverse_matrix(base_point)
-        tangent_vector = gs.einsum(
-            "...ij,...j->...i",
-            gs.linalg.cholesky(inv_metric),
-            vector,
-        )
-        return tangent_vector
+        return vector
 
     def random_point(self, rng):
         return self.random_uniform(rng)
