@@ -12,6 +12,8 @@ from diffrax.misc import bounded_while_loop
 import cvxpy as cp
 import jax.experimental.host_callback as hcb
 
+diagm = jax.vmap(gs.diag)
+
 def proj(inp):
     A, b, base_point = inp
     X = cp.Variable(base_point.shape)
@@ -287,7 +289,8 @@ class HessianPolytopeMetric(RiemannianMetric):
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
-        return gs.linalg.cholesky(self.metric_inverse_matrix(x))
+        u, s, v = gs.linalg.svd(self.metric_inverse_matrix(x), hermitian=True)
+        return u @ diagm(gs.sqrt(s)) @ v
 
     def lambda_x(self, x):
         return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
