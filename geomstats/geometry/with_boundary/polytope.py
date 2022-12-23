@@ -289,8 +289,8 @@ class HessianPolytopeMetric(RiemannianMetric):
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
-        u, s, v = gs.linalg.svd(self.metric_inverse_matrix(x), hermitian=True)
-        return u @ diagm(gs.sqrt(s)) @ v
+        u, s, v = gs.linalg.svd(self.metric_matrix(x), hermitian=True)
+        return u @ diagm(gs.sqrt(s**-1)) @ v
 
     def lambda_x(self, x):
         return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
