@@ -45,7 +45,40 @@ def stable_div(num, den, eps=1e-10):
     )
 
 
-def reflect(r, sn, T, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000):
+def bounded_step(
+        base_point, step_dir, step_mag, A, b,
+        eps=1e-6, eps2=1e-8, max_val=1e10
+):
+    step_size_mask = step_mag > 0
+    num, den = A @ base_point.T - b[:, None], A @ step_dir.T
+    scale = -stable_div(num, den) * step_size_mask
+    scale = gs.clip(scale, -max_val, max_val)
+    # we are moving in the "positive" direction
+    # of s here, so mask out negative values
+    scale_mask = scale <= 0
+    masked_scale = scale_mask * max_val + (1 - scale_mask) * scale
+    # compute the face we will hit first,
+    # e.g. the minimum scaling that lands us
+    # on a face
+    step_mag_argmax = masked_scale.argmin(axis=0)
+    step_mag_max = scale[step_mag_argmax, gs.arange(scale.shape[1])]
+    # us either the remaining magnitude sr
+    # or the maximum scaling that lands us
+    # on a face to scale in the direction s
+    # add this to values of rp which we still
+    # have magnitude left in their step length
+    step_mag = gs.maximum(gs.minimum(step_mag, step_mag_max), 0)
+    base_point = base_point + step_mag[:, None] * step_dir
+    diff = A @ base_point.T - b[:, None]
+    idx = diff >= -eps2
+    base_point = base_point + (A.T @ (-(gs.abs(diff) + eps) * idx)).T
+    return base_point, step_mag, step_mag_argmax
+
+
+def reflect(
+        base_point, step, A, b,
+        eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
+):
     """
     Given a set of N vectors rp in a d-polytope compute the
     set of steps rp + s, where we reflect in the direction
@@ -66,45 +99,22 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000):
     # here to continue reflecting until we
     # have traveled the whole distance
     def reflect_cond(val):
-        rp, s, sr = val
-        return gs.any(sr > 0)
+        _, _, remaining_step_mag = val
+        return gs.any(remaining_step_mag > 0)
 
     def reflect_body(val, _):
         # compute the amount we can scale in the
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
-        rp, s, sr = val
-        sr_mask = sr > 0
-        num, den = T @ rp.T - b[:, None], T @ s.T
-        scale = -stable_div(num, den) * sr_mask
-        scale = gs.clip(scale, -max_val, max_val)
-        # we are moving in the "positive" direction
-        # of s here, so mask out negative values
-        scale_mask = scale <= 0
-        masked_scale = scale_mask * max_val + (1 - scale_mask) * scale
-        # compute the face we will hit first,
-        # e.g. the minimum scaling that lands us
-        # on a face
-        a_argmax = masked_scale.argmin(axis=0)
-        a_max = scale[a_argmax, gs.arange(scale.shape[1])]
-        # us either the remaining magnitude sr
-        # or the maximum scaling that lands us
-        # on a face to scale in the direction s
-        # add this to values of rp which we still
-        # have magnitude left in their step length
-        a = gs.maximum(gs.minimum(sr, a_max), 0)
-        rp = rp + a[:, None] * s
-        diff = T @ rp.T - b[:, None]
-        idx = diff >= -eps2
-        rp = rp + (T.T @ (-(gs.abs(diff) + eps) * idx)).T
-        # this is just a test to ensure we are
-        # still in the polytope
-        # assert(gs.all(T @ rp.T <= b[:, None]))
+        base_point, step_dir, remaining_step_mag = val
+        base_point, step_mag, step_mag_argmax = bounded_step(
+            base_point, step_dir, remaining_step_mag, A, b, eps=eps, eps2=eps2, max_val=max_val
+        )
         # we are going to reflect around the face
         # we land on, so we grab that face from T
         # and normalize it
-        n = T[a_argmax, :]
-        n = n / gs.sqrt(gs.sum(n**2, axis=-1))[:, None]
+        normal_face = A[step_mag_argmax, :]
+        normal_face = normal_face / gs.sqrt(gs.sum(normal_face**2, axis=-1))[:, None]
         # this is the reflection: note we only
         # need to reflect the direction vector s
         # about the face. for a single vector
@@ -113,23 +123,25 @@ def reflect(r, sn, T, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000):
         # where r is the reflection. for the
         # vectorized case we compute the row-wise
         # dot products using gs.sum(s * n, axis=-1)
-        s = s - (2 * gs.sum(s * n, axis=-1)[:, None] * n)
+        step_dir = step_dir - (2 * gs.sum(step_dir * normal_face, axis=-1)[:, None] * normal_face)
         # because n and s are normalized the
         # resulting s should be normalized too
         # we renormalize for numberical stabilty
-        s = s / gs.sqrt(gs.sum(s**2, axis=-1))[:, None]
+        step_dir = step_dir / gs.sqrt(gs.sum(step_dir**2, axis=-1))[:, None]
         # now we subtract the distance we
         # reflected from the magnitude, once this
         # is negative we stop reflecting that
         # vector
-        sr = sr - a
-        return rp, s, sr
+        remaining_step_size = remaining_step_mag - step_mag
+        return base_point, step_dir, remaining_step_size
 
-    sr = gs.sqrt(gs.sum(sn**2, axis=-1))
-    sn = sn / sr[:, None]
-    rp, s, sr = bounded_while_loop(reflect_cond, reflect_body, (r, sn, sr), max_iter)
+    step_mag = gs.sqrt(gs.sum(step**2, axis=-1))
+    step_dir = step / step_mag[:, None]
+    base_point, _, _ = bounded_while_loop(
+        reflect_cond, reflect_body, (base_point, step_dir, step_mag), max_iter
+    )
 
-    return rp
+    return base_point
 
 
 class Polytope(Manifold):
@@ -263,13 +275,7 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
-        base_shape = base_point.shape
-        base_point = base_point.reshape(-1, base_shape[-1])
-        tangent_vec = tangent_vec.reshape(-1, base_shape[-1])
-        exp_point = reflect(base_point, tangent_vec, self.T, self.b)
-        return exp_point.reshape(
-            base_shape
-        )  # reflect(base_point, tangent_vec, self.T, self.b)
+        return reflect(base_point, tangent_vec, self.T, self.b)
 
 
 class HessianPolytopeMetric(RiemannianMetric):
@@ -300,8 +306,12 @@ class HessianPolytopeMetric(RiemannianMetric):
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
-        base_point += tangent_vec  # in chart tangent space
-        return device_proj(self.T, self.b, base_point)
+        tangent_mag = gs.sqrt(gs.sum(tangent_vec ** 2, axis=-1))
+        tangent_dir = tangent_vec / tangent_mag[:, None]
+        base_point, _, _ = bounded_step(
+            base_point, tangent_dir, tangent_mag, self.T, self.b
+        )
+        return base_point
 
 
 class HessianCubeMetric(HessianPolytopeMetric):
