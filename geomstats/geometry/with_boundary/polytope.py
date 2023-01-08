@@ -155,9 +155,9 @@ class Polytope(Manifold):
         if npz is not None:
             data = np.load(npz)
             self.T, self.b = gs.array(data["T"]), gs.array(data["b"])
-            if "cube" in npz:
+            if "cube" in npz and proj_type is None:
                 proj_type = "cube"
-            elif "dirichlet" in npz:
+            elif "dirichlet" in npz and proj_type is None:
                 proj_type = "triangle"
         elif T is not None and b is not None:
             self.T, self.b = gs.array(T), gs.array(b)
