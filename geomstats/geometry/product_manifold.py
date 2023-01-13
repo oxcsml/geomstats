@@ -34,7 +34,7 @@ class NonEmbeddedProductManifold(Manifold):
 
     @property
     def identity(self):
-        return gs.repeat(gs.expand_dims(self.manifold.identity, -2), self.mul, -2)
+        return gs.stack([gs.expand_dims(manifold.identity, -2) for manifold in self.manifolds])
 
     def _iterate_over_manifolds(self, func, kwargs, in_axes=-2, out_axes=-2):
         out = []
