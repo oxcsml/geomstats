@@ -165,12 +165,9 @@ class ProductManifold(NonEmbeddedProductManifold, EmbeddedManifold):
                          else manifold.dim for manifold in self.manifolds]
         dim = sum(manifold_dims)
         if embedding_space is None:
-            for i in range(len(manifolds)):
-                if hasattr(manifolds[i], "embedding_space") and hasattr(manifolds[i].metric, "embedding_metric"):
-                    manifolds[i].embedding_space.metric = manifolds[i].metric.embedding_metric
-
-            for i in range(len(manifolds)):
-                print(manifolds[i].metric.embedding_metric, manifolds[i].embedding_space.metric)
+            for manifold in manifolds:
+                if hasattr(manifold, "embedding_space") and hasattr(manifold.metric, "embedding_metric"):
+                    manifold.embedding_space.metric = manifold.metric.embedding_metric
 
             embedding_space = NonEmbeddedProductManifold(
                 dim=dim, # wrong dim but itll be fixed
