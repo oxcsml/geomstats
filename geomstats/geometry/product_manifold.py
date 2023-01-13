@@ -175,7 +175,8 @@ class ProductManifold(NonEmbeddedProductManifold, EmbeddedManifold):
                     manifold.embedding_space if hasattr(manifold, "embedding_space") 
                     else manifold for manifold in self.manifolds        
                 ]
-            ) 
+            )
+            self.embedding_metric = embedding_space
         super(ProductManifold, self).__init__(
             dim=dim,
             manifolds=manifolds,
