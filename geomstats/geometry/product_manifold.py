@@ -170,7 +170,7 @@ class ProductManifold(NonEmbeddedProductManifold, EmbeddedManifold):
                     manifolds[i].embedding_space.metric = manifolds[i].metric.embedded_metric
 
             for i in range(len(manifolds)):
-                print(manifolds[i].embedding_space.metric)
+                print(manifolds[i].metric.embedded_metric, manifolds[i].embedding_space.metric)
 
             embedding_space = NonEmbeddedProductManifold(
                 dim=dim, # wrong dim but itll be fixed
