@@ -289,7 +289,7 @@ class HessianPolytopeMetric(RiemannianMetric):
 
     def metric_matrix(self, x):
         def calc(x):
-            res = gs.maximum(self.b - self.T @ x.T, self.eps)
+            res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
 
         return jax.vmap(calc)(x)
