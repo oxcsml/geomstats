@@ -299,7 +299,8 @@ class HessianPolytopeMetric(RiemannianMetric):
         return u @ diagm(gs.sqrt(s**-1)) @ v
 
     def lambda_x(self, x):
-        return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
+        # return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
+        return 1.0
 
     def grad_logdet_metric_matrix(self, x):
         return jax.grad(self.lambda_x)(x)
@@ -312,6 +313,12 @@ class HessianPolytopeMetric(RiemannianMetric):
             base_point, tangent_dir, tangent_mag, self.T, self.b
         )
         return base_point
+
+    def norm(self, vector, base_point=None):
+        return gs.linalg.norm(vector, axis=-1)
+
+    def squared_norm(self, vector, base_point=None):
+        return self.norm(vector, base_point=base_point)**2
 
 
 class HessianCubeMetric(HessianPolytopeMetric):

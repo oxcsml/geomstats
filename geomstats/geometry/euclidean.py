@@ -145,6 +145,9 @@ class EuclideanMetric(RiemannianMetric):
         """
         return gs.linalg.norm(vector, axis=-1)
 
+    def squared_norm(self, vector, base_point=None):
+        return self.norm(vector, base_point=base_point)**2
+
     def exp(self, tangent_vec, base_point, **kwargs):
         """Compute exp map of a base point in tangent vector direction.
 
