@@ -170,6 +170,8 @@ class Polytope(Manifold):
         if metric is None:
             if metric_type == "Reflected":
                 metric = ReflectedPolytopeMetric(self.T, self.b)
+            elif metric_type == "Rejection":
+                metric = RejectionPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
                 if proj_type == "cube":
                     metric = HessianCubeMetric(self.T, self.b, eps=eps)
@@ -177,6 +179,9 @@ class Polytope(Manifold):
                 elif proj_type == "triangle":
                     metric = HessianTriangleMetric(self.T, self.b, eps=eps)
                     print("Using triangle metric")
+                elif proj_type == "rejection":
+                    metric = HessianRejectionMetric(self.T, self.b, eps=eps)
+                    print("Using rejection metric")
                 else:
                     metric = HessianPolytopeMetric(self.T, self.b, eps=eps)
             else:
@@ -278,6 +283,21 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         return reflect(base_point, tangent_vec, self.T, self.b)
 
 
+class RejectionPolytopeMetric(EuclideanMetric):
+    def __init__(self, T, b, default_point_type="vector", **kwargs):
+        self.T, self.b = T, b
+        dim = self.T.shape[1]
+        super(RejectionPolytopeMetric, self).__init__(
+            dim=dim, default_point_type=default_point_type
+        )
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        new_point = base_point + tangent_vec
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
+        base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
+        return base_point
+
+
 class HessianPolytopeMetric(RiemannianMetric):
     def __init__(self, T, b, eps=1e-6, default_point_type="vector", **kwargs):
         self.T, self.b = T, b
@@ -306,14 +326,11 @@ class HessianPolytopeMetric(RiemannianMetric):
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
-        # tangent_mag = gs.sqrt(gs.sum(tangent_vec ** 2, axis=-1))
-        # tangent_dir = tangent_vec / tangent_mag[:, None]
-        # base_point, _, _ = bounded_step(
-        #     base_point, tangent_dir, tangent_mag, self.T, self.b
-        # )
-        new_point = base_point + tangent_vec
-        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
-        base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
+        tangent_mag = gs.sqrt(gs.sum(tangent_vec ** 2, axis=-1))
+        tangent_dir = tangent_vec / tangent_mag[:, None]
+        base_point, _, _ = bounded_step(
+            base_point, tangent_dir, tangent_mag, self.T, self.b
+        )
         return base_point
 
     def norm(self, vector, base_point=None):
@@ -323,16 +340,30 @@ class HessianPolytopeMetric(RiemannianMetric):
         return self.norm(vector, base_point=base_point)**2
 
 
+class HessianRejectionMetric(HessianPolytopeMetric):
+    def __init__(self, T, b, eps=1e-6):
+        super(HessianRejectionMetric, self).__init__(
+            T=T, b=b, eps=eps
+        )
+
+    def exp(self, tangent_vec, base_point, **kwargs):
+        """Use a retraction instead of the true exponential map."""
+        new_point = base_point + tangent_vec
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
+        base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
+        return base_point
+
+
 class HessianCubeMetric(HessianPolytopeMetric):
     def __init__(self, T, b, eps=1e-6):
         super(HessianCubeMetric, self).__init__(
             T=T, b=b, eps=eps
         )
 
-    # def exp(self, tangent_vec, base_point, **kwargs):
-    #     """Use a retraction instead of the true exponential map."""
-    #     base_point += tangent_vec  # in chart tangent space
-    #     return gs.clip(base_point, a_min=-self.b[0], a_max=self.b[0])
+    def exp(self, tangent_vec, base_point, **kwargs):
+        """Use a retraction instead of the true exponential map."""
+        base_point += tangent_vec  # in chart tangent space
+        return gs.clip(base_point, a_min=-self.b[0], a_max=self.b[0])
 
 
 class HessianTriangleMetric(HessianPolytopeMetric):
@@ -344,11 +375,11 @@ class HessianTriangleMetric(HessianPolytopeMetric):
         normal_vec = gs.ones((T.shape[1], 1))
         self.proj = normal_vec @ normal_vec.T / (normal_vec.T @ normal_vec)
 
-    # def exp(self, tangent_vec, base_point, **kwargs):
-    #     """Use a retraction instead of the true exponential map."""
-    #     base_point += tangent_vec
-    #     base_point = gs.maximum(base_point, 0)
-    #     mask = self.T[-1, :] @ base_point.T > self.b[-1]
-    #     base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
-    #     base_point = gs.clip(base_point, 0, 1)
-    #     return base_point
+    def exp(self, tangent_vec, base_point, **kwargs):
+        """Use a retraction instead of the true exponential map."""
+        base_point += tangent_vec
+        base_point = gs.maximum(base_point, 0)
+        mask = self.T[-1, :] @ base_point.T > self.b[-1]
+        base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
+        base_point = gs.clip(base_point, 0, 1)
+        return base_point
