@@ -291,7 +291,6 @@ class HessianPolytopeMetric(RiemannianMetric):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
-
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
@@ -307,11 +306,14 @@ class HessianPolytopeMetric(RiemannianMetric):
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
-        tangent_mag = gs.sqrt(gs.sum(tangent_vec ** 2, axis=-1))
-        tangent_dir = tangent_vec / tangent_mag[:, None]
-        base_point, _, _ = bounded_step(
-            base_point, tangent_dir, tangent_mag, self.T, self.b
-        )
+        # tangent_mag = gs.sqrt(gs.sum(tangent_vec ** 2, axis=-1))
+        # tangent_dir = tangent_vec / tangent_mag[:, None]
+        # base_point, _, _ = bounded_step(
+        #     base_point, tangent_dir, tangent_mag, self.T, self.b
+        # )
+        new_point = base_point + tangent_vec
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
+        base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
         return base_point
 
     def norm(self, vector, base_point=None):
@@ -327,10 +329,10 @@ class HessianCubeMetric(HessianPolytopeMetric):
             T=T, b=b, eps=eps
         )
 
-    def exp(self, tangent_vec, base_point, **kwargs):
-        """Use a retraction instead of the true exponential map."""
-        base_point += tangent_vec  # in chart tangent space
-        return gs.clip(base_point, a_min=-self.b[0], a_max=self.b[0])
+    # def exp(self, tangent_vec, base_point, **kwargs):
+    #     """Use a retraction instead of the true exponential map."""
+    #     base_point += tangent_vec  # in chart tangent space
+    #     return gs.clip(base_point, a_min=-self.b[0], a_max=self.b[0])
 
 
 class HessianTriangleMetric(HessianPolytopeMetric):
@@ -342,11 +344,11 @@ class HessianTriangleMetric(HessianPolytopeMetric):
         normal_vec = gs.ones((T.shape[1], 1))
         self.proj = normal_vec @ normal_vec.T / (normal_vec.T @ normal_vec)
 
-    def exp(self, tangent_vec, base_point, **kwargs):
-        """Use a retraction instead of the true exponential map."""
-        base_point += tangent_vec
-        base_point = gs.maximum(base_point, 0)
-        mask = self.T[-1, :] @ base_point.T > self.b[-1]
-        base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
-        base_point = gs.clip(base_point, 0, 1)
-        return base_point
+    # def exp(self, tangent_vec, base_point, **kwargs):
+    #     """Use a retraction instead of the true exponential map."""
+    #     base_point += tangent_vec
+    #     base_point = gs.maximum(base_point, 0)
+    #     mask = self.T[-1, :] @ base_point.T > self.b[-1]
+    #     base_point += mask[:, None] * (self.shift - (base_point @ self.proj.T))
+    #     base_point = gs.clip(base_point, 0, 1)
+    #     return base_point
