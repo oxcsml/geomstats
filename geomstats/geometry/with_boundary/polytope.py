@@ -280,6 +280,12 @@ class Polytope(Manifold):
 
         return distance_to_boundary
 
+    def distance_to_boundary(self, x):
+        T, b = self.T, self.b
+        vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
+        distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
+        return jax.numpy.min(distances, axis=0)
+
 
 class ReflectedPolytopeMetric(EuclideanMetric):
     def __init__(self, T, b, default_point_type="vector", **kwargs):
