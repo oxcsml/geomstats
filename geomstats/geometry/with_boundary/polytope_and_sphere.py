@@ -292,7 +292,7 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
             sphere_res2 = sq_sphere_norm - self.r * sphere_norm
             sphere += gs.eye(x.shape[0]) * sphere_res2**-1
 
-            return affine + sphere
+            return affine - sphere
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
