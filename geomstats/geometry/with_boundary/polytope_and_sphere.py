@@ -282,12 +282,17 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
 
     def metric_matrix(self, x):
         def calc(x):
-            res = gs.concatenate([
-                self.b - self.T @ x.T,
-                self.r - gs.linalg.norm(self.S * x)[:, None]
-            ], axis=-1)
-            res = gs.maximum(res, 0) + self.eps
-            return self.T.T @ jax.numpy.diag(res**-2) @ self.T
+            affine_res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
+            affine = self.T.T @ jax.numpy.diag(affine_res**-2) @ self.T
+
+            sphere_norm = np.linalg.norm(self.S * x)
+            sq_sphere_norm = sphere_norm**2
+            sphere_res1 = gs.maximum(sq_sphere_norm**(3/2) * (self.r - sphere_norm), 0) + self.eps
+            sphere = np.outer(self.S * x, self.S * x) * sphere_res1 **(-1)
+            sphere_res2 = gs.maximum(sq_sphere_norm**2 - self.r * sphere_norm, 0) + self.eps
+            sphere += gs.eye(x.shape[0]) * sphere_res2
+
+            return affine + sphere
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
