@@ -14,21 +14,6 @@ import jax.experimental.host_callback as hcb
 
 diagm = jax.vmap(gs.diag)
 
-def proj(inp):
-    A, b, base_point = inp
-    X = cp.Variable(base_point.shape)
-    problem = cp.Problem(
-        cp.Minimize(cp.sum_squares(X - base_point)),
-        [A @ X.T <= b[:, None]]
-    )
-    problem.solve()
-    return X.value
-
-def device_proj(A, b, x):
-    return hcb.call(
-        proj, (A, b, x),
-        result_shape=jax.ShapeDtypeStruct(x.shape, x.dtype)
-    )
 
 # todo: if b is always either M, 1 or M, N then
 # you dont need to expand dims and you can handle
@@ -144,19 +129,17 @@ def reflect(
     return base_point
 
 
-class Polytope(Manifold):
+class PolytopeAndSphere(Manifold):
+
     def __init__(
-        self, T=None, b=None, npz=None, metric=None, proj_type=None, metric_type="Reflected", eps=1e-6, **kwargs
+        self, T=None, b=None, S=None, r=None,
+        npz=None, metric=None, metric_type="Reflected", eps=1e-6, **kwargs
     ):
         if npz is not None:
             data = np.load(npz)
-            self.T, self.b = gs.array(data["T"]), gs.array(data["b"])
-            if "cube" in npz and proj_type is None:
-                proj_type = "cube"
-            elif "dirichlet" in npz and proj_type is None:
-                proj_type = "triangle"
+            self.T, self.b, self.S, self.r = gs.array(data["T"]), gs.array(data["b"]), gs.array(data["S"]), gs.array(data["r"])
         elif T is not None and b is not None:
-            self.T, self.b = gs.array(T), gs.array(b)
+            self.T, self.b, self.S, self.r = gs.array(T), gs.array(b), gs.array(S), gs.array(r)
         else:
             raise ValueError(
                 "You need either the inequality matrices or "
@@ -165,24 +148,28 @@ class Polytope(Manifold):
         dim = self.T.shape[1]
         if metric is None:
             if metric_type == "Reflected":
-                metric = ReflectedPolytopeMetric(self.T, self.b)
+                metric = ReflectedPolytopeAndSphereMetric(self.T, self.b, self.S, self.r)
             elif metric_type == "Rejection":
-                metric = RejectionPolytopeMetric(self.T, self.b)
+                metric = RejectionPolytopeAndSphereMetric(self.T, self.b, self.S, self.r)
             elif metric_type == "Hessian":
-                metric = HessianPolytopeMetric(self.T, self.b, eps=eps)
+                metric = HessianPolytopeAndSphereMetric(self.T, self.b, self.S, self.r, eps=eps)
             else:
                 raise NotImplementedError
 
-        super(Polytope, self).__init__(dim=dim, metric=metric)
+        super(PolytopeAndSphere, self).__init__(dim=dim, metric=metric)
         self.metric = metric
         # used to compute a point in the interior of the polytope
         # which we can do random walks from to generate random samples
         xc = cp.Variable(self.T.shape[1])
-        r = cp.Variable()
+        d = cp.Variable()
 
         problem = cp.Problem(
-            cp.Maximize(r),
-            [self.T @ xc.T + r * cp.norm(self.T, axis=1) <= self.b, r >= 0]
+            cp.Maximize(d),
+            [
+                self.T @ xc.T + d * cp.norm(self.T, axis=1) <= self.b,
+                cp.sum((self.S * xc)**2) <= self.r,
+                d >= 0
+            ]
         )
         problem.solve()
 
@@ -231,14 +218,6 @@ class Polytope(Manifold):
 
     def random_walk(self, rng, x, t):
         return None
-        rng, z = self.random_normal_tangent(
-            state=rng, base_point=x, n_samples=x.shape[0]
-        )
-        if len(t.shape) == len(x.shape) - 1:
-            t = t[..., None]
-        tangent_vector = gs.sqrt(t) * z
-        samples = self.exp(tangent_vec=tangent_vector, base_point=x)
-        return samples
 
     def belongs(self, x, atol=1e-12):
         return np.all(self.T @ x.T <= self.b[:, None] + atol, axis=0)
@@ -256,28 +235,19 @@ class Polytope(Manifold):
     def identity(self):
         return gs.zeros(self.dim)
 
-    def get_distance_to_boundary(self):
-        T, b = self.T, self.b
-        vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
-
-        def distance_to_boundary(x):
-            distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
-            return jax.numpy.min(distances, axis=0)
-
-        return distance_to_boundary
-
     def distance_to_boundary(self, x):
-        T, b = self.T, self.b
+        T, b, S, r = self.T, self.b, self.S, self.r
         vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
-        distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
-        return jax.numpy.min(distances, axis=0)
+        polytope_distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
+        sphere_distances = jax.numpy.abs(gs.linalg.norm(S * x) - r)
+        return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances, axis=0)
 
 
-class ReflectedPolytopeMetric(EuclideanMetric):
-    def __init__(self, T, b, default_point_type="vector", **kwargs):
-        self.T, self.b = T, b
+class ReflectedPolytopeAndSphereMetric(EuclideanMetric):
+    def __init__(self, T, b, S, r, default_point_type="vector", **kwargs):
+        self.T, self.b, self.S, self.r = T, b, S, r
         dim = self.T.shape[1]
-        super(ReflectedPolytopeMetric, self).__init__(
+        super(ReflectedPolytopeAndSphereMetric, self).__init__(
             dim=dim, default_point_type=default_point_type
         )
 
@@ -285,33 +255,38 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         return reflect(base_point, tangent_vec, self.T, self.b)
 
 
-class RejectionPolytopeMetric(EuclideanMetric):
-    def __init__(self, T, b, default_point_type="vector", **kwargs):
-        self.T, self.b = T, b
+class RejectionPolytopeAndSphereMetric(EuclideanMetric):
+    def __init__(self, T, b, S, r, default_point_type="vector", **kwargs):
+        self.T, self.b, self.S, self.r = T, b, S, r
         dim = self.T.shape[1]
-        super(RejectionPolytopeMetric, self).__init__(
+        super(RejectionPolytopeAndSphereMetric, self).__init__(
             dim=dim, default_point_type=default_point_type
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
         new_point = base_point + tangent_vec
-        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0) & \
+               (gs.linalg.norm(self.S * new_point, axis=1) < self.r)
         base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
         return base_point
 
 
-class HessianPolytopeMetric(RiemannianMetric):
-    def __init__(self, T, b, eps=1e-6, default_point_type="vector", **kwargs):
-        self.T, self.b = T, b
+class HessianPolytopeAndSphereMetric(RiemannianMetric):
+    def __init__(self, T, b, S, r, eps=1e-6, default_point_type="vector", **kwargs):
+        self.T, self.b, self.S, self.r = T, b, S, r
         self.eps = eps
         dim = self.T.shape[1]
-        super(HessianPolytopeMetric, self).__init__(
+        super(HessianPolytopeAndSphereMetric, self).__init__(
             dim=dim, default_point_type=default_point_type
         )
 
     def metric_matrix(self, x):
         def calc(x):
-            res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
+            res = gs.concatenate([
+                self.b - self.T @ x.T,
+                self.r - gs.linalg.norm(self.S * x)
+            ], axis=-1)
+            res = gs.maximum(res, 0) + self.eps
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
         return jax.vmap(calc)(x)
 
@@ -329,7 +304,8 @@ class HessianPolytopeMetric(RiemannianMetric):
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
         new_point = base_point + tangent_vec
-        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0) & \
+               (gs.linalg.norm(self.S * new_point, axis=1) < self.r)
         base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
         return base_point
 
@@ -338,4 +314,5 @@ class HessianPolytopeMetric(RiemannianMetric):
 
     def squared_norm(self, vector, base_point=None):
         return self.norm(vector, base_point=base_point)**2
+
 
