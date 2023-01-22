@@ -167,7 +167,7 @@ class PolytopeAndSphere(Manifold):
             cp.Maximize(d),
             [
                 self.T @ xc.T + d * cp.norm(self.T, axis=1) <= self.b,
-                cp.sum((self.S * xc)**2) <= self.r,
+                cp.sum(cp.multiply(self.S * xc)**2) <= self.r,
                 d >= 0
             ]
         )
@@ -284,7 +284,7 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
         def calc(x):
             res = gs.concatenate([
                 self.b - self.T @ x.T,
-                self.r - gs.linalg.norm(self.S * x)
+                self.r - gs.linalg.norm(self.S * x)[:, None]
             ], axis=-1)
             res = gs.maximum(res, 0) + self.eps
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
