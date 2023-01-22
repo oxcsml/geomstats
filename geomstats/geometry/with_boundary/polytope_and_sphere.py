@@ -167,7 +167,7 @@ class PolytopeAndSphere(Manifold):
             cp.Maximize(d),
             [
                 self.T @ xc.T + d * cp.norm(self.T, axis=1) <= self.b,
-                cp.sum(cp.multiply(self.S * xc)**2) <= self.r,
+                cp.sum(cp.multiply(self.S, xc)**2) <= self.r,
                 d >= 0
             ]
         )
