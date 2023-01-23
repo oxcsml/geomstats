@@ -137,7 +137,7 @@ class PolytopeAndSphere(Manifold):
     ):
         if npz is not None:
             data = np.load(npz)
-            self.T, self.b, self.S, self.r = gs.array(data["T"]), gs.array(data["b"]), gs.array(data["S"]), gs.array(data["r"])
+            self.T, self.b, self.S, self.r = gs.array(data["T"]), gs.array(data["b"]), gs.array(data["S"]), gs.array(data["R"])
         elif T is not None and b is not None:
             self.T, self.b, self.S, self.r = gs.array(T), gs.array(b), gs.array(S), gs.array(r)
         else:
