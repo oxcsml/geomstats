@@ -287,10 +287,10 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
 
             sphere_norm = gs.linalg.norm(self.S * x)
             sq_sphere_norm = sphere_norm**2
-            sphere_res1 = sq_sphere_norm**(3/2) * (self.r - sphere_norm)
+            sphere_res1 = sq_sphere_norm**(3/2) * gs.maximum(self.r - sphere_norm, 0) + self.eps
             sphere = gs.outer(self.S * x, self.S * x) * sphere_res1**(-1)
-            sphere_res2 = sq_sphere_norm - self.r * sphere_norm
-            sphere += gs.eye(x.shape[0]) * sphere_res2**-1
+            sphere_res2 = gs.maximum(self.r * sphere_norm - sq_sphere_norm, 0) + self.eps
+            sphere -= gs.eye(x.shape[0]) * sphere_res2**-1
 
             return affine - sphere
         return jax.vmap(calc)(x)
