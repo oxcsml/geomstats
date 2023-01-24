@@ -31,7 +31,7 @@ def stable_div(num, den, eps=1e-10):
 
 
 def bounded_step(
-        base_point, step_dir, step_mag, A, b,
+        base_point, step_dir, step_mag, A, b, S, r,
         eps=1e-6, eps2=1e-8, max_val=1e10
 ):
     step_size_mask = step_mag > 0
@@ -47,6 +47,16 @@ def bounded_step(
     # on a face
     step_mag_argmax = masked_scale.argmin(axis=0)
     step_mag_max = scale[step_mag_argmax, gs.arange(scale.shape[1])]
+
+    # compute where we violate the sphere constraint
+    # and if we do swap tha for the max and save
+    # a mask indicating where we did that
+    # step_mag_max_sphere = np.linalg.norm(S * (base_point + step_dir), axis=1) - r - eps
+    sdotx = gs.dot(step_dir, S * base_point, axis=1)
+    step_mag_max_sphere = 1/2 * (gs.sqrt(sdotx**2 - 4 * (np.linalg.norm(S * base_point, axis=1) - r**2)) - sdotx)
+    sphere_violation = (step_mag_max_sphere < step_mag_max)[:, None]
+    step_mag_max = sphere_violation * step_mag_max_sphere + (1 - step_mag_max_sphere) * step_mag_max
+
     # us either the remaining magnitude sr
     # or the maximum scaling that lands us
     # on a face to scale in the direction s
@@ -57,11 +67,11 @@ def bounded_step(
     diff = A @ base_point.T - b[:, None]
     idx = diff >= -eps2
     base_point = base_point + (A.T @ (-(gs.abs(diff) + eps) * idx)).T
-    return base_point, step_mag, step_mag_argmax
+    return base_point, step_mag, step_mag_argmax, sphere_violation
 
 
 def reflect(
-        base_point, step, A, b,
+        base_point, step, A, b, S, r,
         eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
 ):
     """
@@ -92,13 +102,13 @@ def reflect(
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
         base_point, step_dir, remaining_step_mag = val
-        base_point, step_mag, step_mag_argmax = bounded_step(
+        base_point, step_mag, step_mag_argmax, sphere_violation = bounded_step(
             base_point, step_dir, remaining_step_mag, A, b, eps=eps, eps2=eps2, max_val=max_val
         )
         # we are going to reflect around the face
         # we land on, so we grab that face from T
         # and normalize it
-        normal_face = A[step_mag_argmax, :]
+        normal_face = (1 - sphere_violation) * A[step_mag_argmax, :] + sphere_violation * S * base_point
         normal_face = normal_face / gs.sqrt(gs.sum(normal_face**2, axis=-1))[:, None]
         # this is the reflection: note we only
         # need to reflect the direction vector s
