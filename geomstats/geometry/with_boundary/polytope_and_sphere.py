@@ -188,7 +188,7 @@ class PolytopeAndSphere(Manifold):
             rng, next_rng = jax.random.split(rng)
             samples = jax.random.normal(rng, shape=(n_samples, pos.shape[1]))
             step = step_size * samples
-            return next_rng, reflect(pos, step, self.T, self.b)
+            return next_rng, reflect(pos, step, self.T, self.b, self.S, self.r)
 
         init = gs.tile(self.center[None, :], (n_samples, 1))
         _, samples = jax.lax.fori_loop(0, num_steps, walk, (state, init))
