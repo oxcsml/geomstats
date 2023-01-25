@@ -1,4 +1,3 @@
-"""Euclidean space."""
 from geomstats.geometry.manifold import Manifold
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
@@ -10,7 +9,6 @@ import geomstats.backend as bs
 from diffrax.misc import bounded_while_loop
 
 import cvxpy as cp
-import jax.experimental.host_callback as hcb
 
 diagm = jax.vmap(gs.diag)
 
@@ -38,37 +36,27 @@ def bounded_step(
     num, den = A @ base_point.T - b[:, None], A @ step_dir.T
     scale = -stable_div(num, den) * step_size_mask
     scale = gs.clip(scale, -max_val, max_val)
-    # we are moving in the "positive" direction
-    # of s here, so mask out negative values
     scale_mask = scale <= 0
     masked_scale = scale_mask * max_val + (1 - scale_mask) * scale
-    # compute the face we will hit first,
-    # e.g. the minimum scaling that lands us
-    # on a face
+
     step_mag_argmax = masked_scale.argmin(axis=0)
     step_mag_max = scale[step_mag_argmax, gs.arange(scale.shape[1])]
 
-    # compute where we violate the sphere constraint
-    # and if we do swap tha for the max and save
-    # a mask indicating where we did that
-    # step_mag_max_sphere = np.linalg.norm(S * (base_point + step_dir), axis=1) - r - eps
-    sdotx = gs.dot(step_dir, S * base_point, axis=1)
-    step_mag_max_sphere = 1/2 * (gs.sqrt(sdotx**2 - 4 * (np.linalg.norm(S * base_point, axis=1) - r**2)) - sdotx)
-    sphere_violation = (step_mag_max_sphere < step_mag_max)[:, None]
-    step_mag_max = sphere_violation * step_mag_max_sphere + (1 - step_mag_max_sphere) * step_mag_max
+    sdotx = 2 * gs.einsum("ij,ij->i", step_dir, S * base_point)
+    snorm2 = gs.sum((S * step_dir)**2, axis=1)
+    xnorm2 = gs.sum((S * base_point)**2, axis=1)
+    step_mag_max_sphere = (2 * snorm2)**-1 * (-sdotx + gs.sqrt(sdotx**2 - 4 * snorm2 * (xnorm2 - r**2)))
 
-    # us either the remaining magnitude sr
-    # or the maximum scaling that lands us
-    # on a face to scale in the direction s
-    # add this to values of rp which we still
-    # have magnitude left in their step length
+    sphere_violation = (step_mag_max_sphere < step_mag_max) | (step_mag_max < 0)
+
+    step_mag_max = sphere_violation * step_mag_max_sphere + (1 - sphere_violation) * step_mag_max
     step_mag = gs.maximum(gs.minimum(step_mag, step_mag_max), 0)
     base_point = base_point + step_mag[:, None] * step_dir
+    base_point = (1 - eps) * sphere_violation[:, None] * base_point + (1 - sphere_violation[:, None]) * base_point
     diff = A @ base_point.T - b[:, None]
     idx = diff >= -eps2
     base_point = base_point + (A.T @ (-(gs.abs(diff) + eps) * idx)).T
-    return base_point, step_mag, step_mag_argmax, sphere_violation
-
+    return base_point, step_mag, step_mag_argmax, sphere_violation[:, None]
 
 def reflect(
         base_point, step, A, b, S, r,
@@ -103,7 +91,7 @@ def reflect(
         # for any of the rp, s vector pairs
         base_point, step_dir, remaining_step_mag = val
         base_point, step_mag, step_mag_argmax, sphere_violation = bounded_step(
-            base_point, step_dir, remaining_step_mag, A, b, eps=eps, eps2=eps2, max_val=max_val
+            base_point, step_dir, remaining_step_mag, A, b, S, r, eps=eps, eps2=eps2, max_val=max_val
         )
         # we are going to reflect around the face
         # we land on, so we grab that face from T
@@ -127,8 +115,8 @@ def reflect(
         # reflected from the magnitude, once this
         # is negative we stop reflecting that
         # vector
-        remaining_step_size = remaining_step_mag - step_mag
-        return base_point, step_dir, remaining_step_size
+        remaining_step_mag = remaining_step_mag - step_mag
+        return base_point, step_dir, remaining_step_mag
 
     step_mag = gs.sqrt(gs.sum(step**2, axis=-1))
     step_dir = step / step_mag[:, None]
@@ -262,7 +250,7 @@ class ReflectedPolytopeAndSphereMetric(EuclideanMetric):
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
-        return reflect(base_point, tangent_vec, self.T, self.b)
+        return reflect(base_point, tangent_vec, self.T, self.b, self.S, self.r)
 
 
 class RejectionPolytopeAndSphereMetric(EuclideanMetric):
