@@ -238,7 +238,7 @@ class PolytopeAndSphere(Manifold):
         vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
         polytope_distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
         sphere_distances = jax.numpy.abs(gs.linalg.norm(S * x) - r)
-        return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances, axis=0)
+        return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances)
 
 
 class ReflectedPolytopeAndSphereMetric(EuclideanMetric):
