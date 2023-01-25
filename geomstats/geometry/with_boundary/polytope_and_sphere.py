@@ -285,14 +285,14 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
 
             sphere_norm_sq = gs.sum((self.S * x)**2)
             sphere_norm = gs.sqrt(sphere_norm_sq)
-            sphere_res = (gs.maximum(self.r - sphere_norm, 0) + self.eps)
-            sphere_outer = gs.outer(self.S * x, self.S * x)
-            # sphere_res1 = sq_sphere_norm**(3/2) * (gs.maximum(self.r - sphere_norm, 0) + self.eps)
-            # sphere = gs.outer(self.S * x, self.S * x) * sphere_res1**(-1)
-            # sphere_res2 = gs.maximum(self.r * sphere_norm - sq_sphere_norm, 0) + self.eps
-            # sphere -= gs.eye(x.shape[0]) * sphere_res2**-1
-            sphere = sphere_outer / (sphere_norm_sq * sphere_res) * (sphere_norm**-1 + sphere_res**-1)
-            sphere -= gs.diag(self.S) / (sphere_norm * sphere_res)
+            # sphere_res = (gs.maximum(self.r - sphere_norm, 0) + self.eps)
+            # sphere_outer = gs.outer(self.S * x, self.S * x)
+            sphere_res1 = sphere_norm_sq**(3/2) * (gs.maximum(self.r - sphere_norm, 0) + self.eps)
+            sphere = gs.outer(self.S * x, self.S * x) * sphere_res1**(-1)
+            sphere_res2 = gs.maximum(self.r * sphere_norm - sphere_norm_sq, 0) + self.eps
+            sphere -= gs.eye(x.shape[0]) * sphere_res2**-1
+            # sphere = sphere_outer / (sphere_norm_sq * sphere_res) * (sphere_norm**-1 + sphere_res**-1)
+            # sphere -= gs.diag(self.S) / (sphere_norm * sphere_res)
 
             return affine - sphere
         return jax.vmap(calc)(x)
