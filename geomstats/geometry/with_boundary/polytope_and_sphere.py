@@ -1,4 +1,3 @@
-"""Euclidean space."""
 from geomstats.geometry.manifold import Manifold
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
@@ -10,7 +9,6 @@ import geomstats.backend as bs
 from diffrax.misc import bounded_while_loop
 
 import cvxpy as cp
-import jax.experimental.host_callback as hcb
 
 diagm = jax.vmap(gs.diag)
 
@@ -31,37 +29,37 @@ def stable_div(num, den, eps=1e-10):
 
 
 def bounded_step(
-        base_point, step_dir, step_mag, A, b,
+        base_point, step_dir, step_mag, A, b, S, r,
         eps=1e-6, eps2=1e-8, max_val=1e10
 ):
     step_size_mask = step_mag > 0
     num, den = A @ base_point.T - b[:, None], A @ step_dir.T
     scale = -stable_div(num, den) * step_size_mask
     scale = gs.clip(scale, -max_val, max_val)
-    # we are moving in the "positive" direction
-    # of s here, so mask out negative values
     scale_mask = scale <= 0
     masked_scale = scale_mask * max_val + (1 - scale_mask) * scale
-    # compute the face we will hit first,
-    # e.g. the minimum scaling that lands us
-    # on a face
+
     step_mag_argmax = masked_scale.argmin(axis=0)
     step_mag_max = scale[step_mag_argmax, gs.arange(scale.shape[1])]
-    # us either the remaining magnitude sr
-    # or the maximum scaling that lands us
-    # on a face to scale in the direction s
-    # add this to values of rp which we still
-    # have magnitude left in their step length
+
+    sdotx = 2 * gs.einsum("ij,ij->i", step_dir, S * base_point)
+    snorm2 = gs.sum((S * step_dir)**2, axis=1)
+    xnorm2 = gs.sum((S * base_point)**2, axis=1)
+    step_mag_max_sphere = (2 * snorm2)**-1 * (-sdotx + gs.sqrt(sdotx**2 - 4 * snorm2 * (xnorm2 - r**2)))
+
+    sphere_violation = (step_mag_max_sphere < step_mag_max) | (step_mag_max < 0)
+
+    step_mag_max = sphere_violation * step_mag_max_sphere + (1 - sphere_violation) * step_mag_max
     step_mag = gs.maximum(gs.minimum(step_mag, step_mag_max), 0)
     base_point = base_point + step_mag[:, None] * step_dir
+    base_point = (1 - eps) * sphere_violation[:, None] * base_point + (1 - sphere_violation[:, None]) * base_point
     diff = A @ base_point.T - b[:, None]
     idx = diff >= -eps2
     base_point = base_point + (A.T @ (-(gs.abs(diff) + eps) * idx)).T
-    return base_point, step_mag, step_mag_argmax
-
+    return base_point, step_mag, step_mag_argmax, sphere_violation[:, None]
 
 def reflect(
-        base_point, step, A, b,
+        base_point, step, A, b, S, r,
         eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
 ):
     """
@@ -92,13 +90,13 @@ def reflect(
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
         base_point, step_dir, remaining_step_mag = val
-        base_point, step_mag, step_mag_argmax = bounded_step(
-            base_point, step_dir, remaining_step_mag, A, b, eps=eps, eps2=eps2, max_val=max_val
+        base_point, step_mag, step_mag_argmax, sphere_violation = bounded_step(
+            base_point, step_dir, remaining_step_mag, A, b, S, r, eps=eps, eps2=eps2, max_val=max_val
         )
         # we are going to reflect around the face
         # we land on, so we grab that face from T
         # and normalize it
-        normal_face = A[step_mag_argmax, :]
+        normal_face = (1 - sphere_violation) * A[step_mag_argmax, :] + sphere_violation * S * base_point
         normal_face = normal_face / gs.sqrt(gs.sum(normal_face**2, axis=-1))[:, None]
         # this is the reflection: note we only
         # need to reflect the direction vector s
@@ -117,8 +115,8 @@ def reflect(
         # reflected from the magnitude, once this
         # is negative we stop reflecting that
         # vector
-        remaining_step_size = remaining_step_mag - step_mag
-        return base_point, step_dir, remaining_step_size
+        remaining_step_mag = remaining_step_mag - step_mag
+        return base_point, step_dir, remaining_step_mag
 
     step_mag = gs.sqrt(gs.sum(step**2, axis=-1))
     step_dir = step / step_mag[:, None]
@@ -190,7 +188,7 @@ class PolytopeAndSphere(Manifold):
             rng, next_rng = jax.random.split(rng)
             samples = jax.random.normal(rng, shape=(n_samples, pos.shape[1]))
             step = step_size * samples
-            return next_rng, reflect(pos, step, self.T, self.b)
+            return next_rng, reflect(pos, step, self.T, self.b, self.S, self.r)
 
         init = gs.tile(self.center[None, :], (n_samples, 1))
         _, samples = jax.lax.fori_loop(0, num_steps, walk, (state, init))
@@ -240,7 +238,7 @@ class PolytopeAndSphere(Manifold):
         vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
         polytope_distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
         sphere_distances = jax.numpy.abs(gs.linalg.norm(S * x) - r)
-        return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances, axis=0)
+        return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances)
 
 
 class ReflectedPolytopeAndSphereMetric(EuclideanMetric):
@@ -252,7 +250,7 @@ class ReflectedPolytopeAndSphereMetric(EuclideanMetric):
         )
 
     def exp(self, tangent_vec, base_point, **kwargs):
-        return reflect(base_point, tangent_vec, self.T, self.b)
+        return reflect(base_point, tangent_vec, self.T, self.b, self.S, self.r)
 
 
 class RejectionPolytopeAndSphereMetric(EuclideanMetric):
@@ -285,12 +283,16 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
             affine_res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
             affine = self.T.T @ gs.diag(affine_res**-2) @ self.T
 
-            sphere_norm = gs.linalg.norm(self.S * x)
-            sq_sphere_norm = sphere_norm**2
-            sphere_res1 = sq_sphere_norm**(3/2) * (gs.maximum(self.r - sphere_norm, 0) + self.eps)
+            sphere_norm_sq = gs.sum((self.S * x)**2)
+            sphere_norm = gs.sqrt(sphere_norm_sq)
+            # sphere_res = (gs.maximum(self.r - sphere_norm, 0) + self.eps)
+            # sphere_outer = gs.outer(self.S * x, self.S * x)
+            sphere_res1 = sphere_norm_sq**(3/2) * (gs.maximum(self.r - sphere_norm, 0) + self.eps)
             sphere = gs.outer(self.S * x, self.S * x) * sphere_res1**(-1)
-            sphere_res2 = gs.maximum(self.r * sphere_norm - sq_sphere_norm, 0) + self.eps
+            sphere_res2 = gs.maximum(self.r * sphere_norm - sphere_norm_sq, 0) + self.eps
             sphere -= gs.eye(x.shape[0]) * sphere_res2**-1
+            # sphere = sphere_outer / (sphere_norm_sq * sphere_res) * (sphere_norm**-1 + sphere_res**-1)
+            # sphere -= gs.diag(self.S) / (sphere_norm * sphere_res)
 
             return affine - sphere
         return jax.vmap(calc)(x)
