@@ -681,6 +681,18 @@ class HypersphereMetric(RiemannianMetric):
         super(HypersphereMetric, self).__init__(dim=dim, signature=(dim, 0))
         self.embedding_metric = EuclideanMetric(dim + 1)
         self._space = _Hypersphere(dim=dim)
+        self.identity = gs.zeros(dim+1)
+        self.identity = self.identity.at[0].set(1)
+
+    def transpfrom0(self, y, v):
+        x = gs.broadcast_to(self.identity, v.shape)
+        tv_0 = self.log(y, x)
+        return self.parallel_transport(v, tv_0, x)
+
+    def transpback0(self, y, v):
+        x = gs.broadcast_to(self.identity, v.shape)
+        tv_0 = self.log(x, y)
+        return self.parallel_transport(v, tv_0, y)
 
     def metric_matrix(self, base_point=None):
         """Metric matrix at the tangent space at a base point.

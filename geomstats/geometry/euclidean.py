@@ -5,6 +5,7 @@ import geomstats.backend as gs
 from geomstats.geometry.base import VectorSpace
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 
+import jax.numpy as jnp
 
 class Euclidean(VectorSpace):
     """Class for Euclidean spaces.
@@ -21,7 +22,7 @@ class Euclidean(VectorSpace):
     def __init__(self, dim, metric=None):
         super(Euclidean, self).__init__(
             shape=(dim,), default_point_type="vector",
-            metric=EuclideanMetric(dim) if metric is not None else metric
+            metric=EuclideanMetric(dim) if metric is None else metric
         )
 
     def get_identity(self, point_type=None):
@@ -199,3 +200,12 @@ class EuclideanMetric(RiemannianMetric):
 
     def grad(self, func):
         return lambda x: gs.autodiff.grad(func)(x)
+    
+    def transpfrom0(self, y, v):
+        return v
+
+    def transpback0(self, y, v):
+        return v
+    
+    def logdetexp(self, x, y):
+        return jnp.zeros_like(x)[..., 0]
