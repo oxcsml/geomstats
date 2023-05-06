@@ -193,6 +193,6 @@ class RejectionHypersphereMetric(HypersphereMetric):
 
     def exp(self, tangent_vec, base_point, **kwargs):
         new_basepoint = super().exp(tangent_vec, base_point, **kwargs)
-        mask = self.is_in_boundary(new_basepoint)
+        mask = self.is_in_boundary(new_basepoint)[:, None]
         return (1 - mask) * base_point + mask * new_basepoint
 
