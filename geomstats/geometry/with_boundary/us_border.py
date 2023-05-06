@@ -117,18 +117,18 @@ def get_national_boundary_fn(pkl="continental_us.pkl"):
 
     @partial(jit, static_argnames=("poles_c", "poles_precomp", "edge_lngs", "edge_lngs_diff"))
     def is_in_boundary(
-        q,
+        q_c,
         poles_c=poles_c, 
         poles_precomp=poles_precomp,
         edge_lngs=edge_lngs,
         edge_lngs_diff=edge_lngs_diff
     ):
         """
-        Checks if an Nx2 array of longitudes (in [0, 2pi)) and latitudes (in [0, pi)) is inside the polytope.
+        Checks if an Nx3 array of spherical points in extrinsic coordinates are within the boundary.
         """
 
         # convert query points to Cartesian coordinates and change reference frame
-        q_c = jnp.stack(spherical2cartesian(*q.T), 1)
+        # q_c = jnp.stack(spherical2cartesian(*q.T), 1)
         q_c = q_c @ Q.T
         
         # also generate spherical coordinates of the new reference frame
