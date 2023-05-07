@@ -47,7 +47,7 @@ def cartesian2spherical(x, y, z):
 
     return lng, lat
 
-def get_national_boundary_fn(pkl="continental_us.pkl"):
+def get_national_boundary_fn(pkl="/data/ziz/not-backed-up/fishman/score-sde/continental_us.pkl"):
     """
     Precompute a bunch of polytope-specific stuff.
     """
