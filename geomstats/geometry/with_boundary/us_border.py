@@ -181,12 +181,14 @@ class BoundedHypersphere(Hypersphere):
         super(BoundedHypersphere, self).__init__(dim)
         is_in_boundary = get_national_boundary_fn()
         self.buffers = jnp.array([
-            -0.01, -0.1, -0.2, -0.3, -0.4, -0.5
+            -0.01, -0.8, -0.2, -0.3, -0.4, -0.55
         ])
         self.buffered_boundary_fns = [
             get_national_boundary_fn(buffer=buffer)
             for buffer in self.buffers
         ]
+        self.buffers -= jnp.min(self.buffers)
+        self.buffers /= jnp.max(self.buffers)
         self.metric = RejectionHypersphereMetric(dim, is_in_boundary)
 
     def distance_to_boundary(self, x):
