@@ -47,7 +47,10 @@ def cartesian2spherical(x, y, z):
 
     return lng, lat
 
-def get_national_boundary_fn(pkl="/data/ziz/not-backed-up/fishman/score-sde/continental_us.pkl"):
+def get_national_boundary_fn(
+        buffer=None,
+        pkl="/data/ziz/not-backed-up/fishman/score-sde/continental_us.pkl"
+):
     """
     Precompute a bunch of polytope-specific stuff.
     """
@@ -56,6 +59,9 @@ def get_national_boundary_fn(pkl="/data/ziz/not-backed-up/fishman/score-sde/cont
         us = pickle.load(f)
 
     us = us.simplify(0)
+
+    if buffer is not None:
+        us = us.buffer(buffer)
 
     # get polygon and reference point in polygon (in this case the centroid is
     # inside the polygon so we're just using that, doesn't not hold in general)
@@ -174,7 +180,25 @@ class BoundedHypersphere(Hypersphere):
     def __init__(self, dim):
         super(BoundedHypersphere, self).__init__(dim)
         is_in_boundary = get_national_boundary_fn()
+        self.buffers = jnp.array([
+            -0.01, -0.1, -0.2, -0.3, -0.4, -0.5
+        ])
+        self.buffered_boundary_fns = [
+            get_national_boundary_fn(buffer=buffer)
+            for buffer in self.buffers
+        ]
         self.metric = RejectionHypersphereMetric(dim, is_in_boundary)
+
+    def distance_to_boundary(self, x):
+        buffer_masks = jnp.hstack([
+            buffered_boundary_fn(x)
+            for buffered_boundary_fn in self.buffered_boundary_fns
+        ])
+        discretized_dists = jnp.min(
+            buffer_masks * self.buffers[:, None] + (1 - buffer_masks), axis=0
+        )
+        return discretized_dists
+
 
 
 class RejectionHypersphereMetric(HypersphereMetric):
