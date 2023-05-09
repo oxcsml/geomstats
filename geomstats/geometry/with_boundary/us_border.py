@@ -181,7 +181,7 @@ class BoundedHypersphere(Hypersphere):
         super(BoundedHypersphere, self).__init__(dim)
         is_in_boundary = get_national_boundary_fn()
         self.buffers = jnp.array([
-            -0.01, -0.12, -0.2, -0.3, -0.4, -0.55
+            -0.01, -0.05, -0.12, -0.2, -0.3, -0.4, -0.55
         ])
         self.buffered_boundary_fns = [
             get_national_boundary_fn(buffer=buffer)
