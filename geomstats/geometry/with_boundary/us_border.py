@@ -181,23 +181,23 @@ class BoundedHypersphere(Hypersphere):
         super(BoundedHypersphere, self).__init__(dim)
         is_in_boundary = get_national_boundary_fn()
         self.buffers = jnp.array([
-            -0.01, -0.8, -0.2, -0.3, -0.4, -0.55
+            -0.01, -0.12, -0.2, -0.3, -0.4, -0.55
         ])
         self.buffered_boundary_fns = [
             get_national_boundary_fn(buffer=buffer)
             for buffer in self.buffers
         ]
-        self.buffers -= jnp.min(self.buffers)
-        self.buffers /= jnp.max(self.buffers)
+        self.buffers -= jnp.max(self.buffers)
+        self.buffers /= jnp.min(self.buffers)
         self.metric = RejectionHypersphereMetric(dim, is_in_boundary)
 
     def distance_to_boundary(self, x):
-        buffer_masks = jnp.hstack([
+        buffer_masks = jnp.vstack([
             buffered_boundary_fn(x)
             for buffered_boundary_fn in self.buffered_boundary_fns
-        ])
-        discretized_dists = jnp.min(
-            buffer_masks * self.buffers[:, None] + (1 - buffer_masks), axis=0
+        ]).T
+        discretized_dists = jnp.max(
+            buffer_masks * self.buffers + jnp.all(buffer_masks, axis=0), axis=1
         )
         return discretized_dists
 
