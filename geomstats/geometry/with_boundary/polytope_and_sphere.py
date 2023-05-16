@@ -237,7 +237,7 @@ class PolytopeAndSphere(Manifold):
         T, b, S, r = self.T, self.b, self.S, self.r
         vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
         polytope_distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
-        sphere_distances = jax.numpy.abs(gs.linalg.norm(S * x) - r)
+        sphere_distances = jax.numpy.abs(gs.linalg.norm(S * x, axis=1) - r)
         return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances)
 
 
