@@ -1,42 +1,11 @@
 Geomstats
 =========
 
-.. list-table::
-   :header-rows: 0
+## Diffusion Models
 
-   * - **Code**
-     - |PyPI version|\ |Downloads|\  |Zenodo|\
-   * - **Continuous Integration**
-     - |Build Status|\ |python|\
-   * - **Code coverage (numpy)**
-     - |Coverage Status np|\
-   * - **Code coverage (autograd, tensorflow, pytorch)**
-     - |Coverage Status autograd|\ |Coverage Status tf|\ |Coverage Status torch|
-   * - **Documentation**
-     - |doc|\  |binder|\ |tutorial|\
-   * - **Community**
-     - |contributions|\  |Slack|\  |Twitter|\
+This is a modified version of the geomstats package redesigned to support jax for use in score-based diffusion models. In the `geomstats/geometry/with_boundary` directory we add support for manifolds with boundary. In particular we add support for polytopes, polytope/sphere intersections, and arbitrarily complex boundaries on the sphere.
 
-**NEWS**:
-
-- Geomstats is recruiting an engineer for a start early 2022! If interested, details can be found `here  <https://gstats.inria.fr/files/2021/10/Research_engineer_gs-1.pdf>`_.
-
-- The white paper summarizing the findings from our `ICLR 2021 challenge of computational differential geometry and topology <https://gt-rl.github.io/challenge>`__ is out. `Read it here <https://arxiv.org/abs/2108.09810>`__.
-
-- Check out our new  `information_geometry <https://github.com/geomstats/geomstats/tree/master/geomstats/information_geometry>`_ module.
-
-Geomstats is an open-source Python package for computations and
-statistics on manifolds. The package is organized into two main modules:
-``geometry`` and ``learning``.
-
-The module ``geometry`` implements concepts in differential geometry,
-and the module ``learning`` implements statistics and learning
-algorithms for data on manifolds.
-
-.. raw:: html
-
-    <img src="https://raw.githubusercontent.com/ninamiolane/geomstats/master/examples/imgs/h2_grid.png" height="120px" width="120px" align="left">
-
+## Geomstats
 
 -  To get an overview of ``geomstats``, see our `introductory
    video <https://www.youtube.com/watch?v=Ju-Wsd84uG0&list=PLYx7XA2nY5GejOB1lsvriFeMytD1-VS1B&index=3>`__.
