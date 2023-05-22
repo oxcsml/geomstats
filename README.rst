@@ -1,11 +1,11 @@
 Geomstats
 =========
 
-## Diffusion Models
+Diffusion Models
 
 This is a modified version of the geomstats package redesigned to support jax for use in score-based diffusion models. In the `geomstats/geometry/with_boundary` directory we add support for manifolds with boundary. In particular we add support for polytopes, polytope/sphere intersections, and arbitrarily complex boundaries on the sphere.
 
-## Geomstats
+Geomstats
 
 -  To get an overview of ``geomstats``, see our `introductory
    video <https://www.youtube.com/watch?v=Ju-Wsd84uG0&list=PLYx7XA2nY5GejOB1lsvriFeMytD1-VS1B&index=3>`__.
