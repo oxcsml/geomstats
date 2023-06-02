@@ -27,7 +27,6 @@ def to_euclidean(r, tau, l, x0, xn1, xn):
     """
     r is a point in the polytope
     tau is a point in the torus of the same dim as the polytope
-    s is a point on the unit sphere (R^3)
     l is the set of lengths of the lings
     d is the distance from the start to end points
     x0 is the start point
