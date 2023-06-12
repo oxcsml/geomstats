@@ -6,7 +6,8 @@ import numpy as np
 import jax.numpy as gs
 import geomstats.backend as bs
 
-from diffrax.misc import bounded_while_loop
+# from diffrax.misc import bounded_while_loop
+from equinox.internal import while_loop
 
 import cvxpy as cp
 
@@ -29,8 +30,7 @@ def stable_div(num, den, eps=1e-10):
 
 
 def bounded_step(
-        base_point, step_dir, step_mag, A, b, S, r,
-        eps=1e-6, eps2=1e-8, max_val=1e10
+    base_point, step_dir, step_mag, A, b, S, r, eps=1e-6, eps2=1e-8, max_val=1e10
 ):
     step_size_mask = step_mag > 0
     num, den = A @ base_point.T - b[:, None], A @ step_dir.T
@@ -43,24 +43,30 @@ def bounded_step(
     step_mag_max = scale[step_mag_argmax, gs.arange(scale.shape[1])]
 
     sdotx = 2 * gs.einsum("ij,ij->i", step_dir, S * base_point)
-    snorm2 = gs.sum((S * step_dir)**2, axis=1)
-    xnorm2 = gs.sum((S * base_point)**2, axis=1)
-    step_mag_max_sphere = (2 * snorm2)**-1 * (-sdotx + gs.sqrt(sdotx**2 - 4 * snorm2 * (xnorm2 - r**2)))
+    snorm2 = gs.sum((S * step_dir) ** 2, axis=1)
+    xnorm2 = gs.sum((S * base_point) ** 2, axis=1)
+    step_mag_max_sphere = (2 * snorm2) ** -1 * (
+        -sdotx + gs.sqrt(sdotx**2 - 4 * snorm2 * (xnorm2 - r**2))
+    )
 
     sphere_violation = (step_mag_max_sphere < step_mag_max) | (step_mag_max < 0)
 
-    step_mag_max = sphere_violation * step_mag_max_sphere + (1 - sphere_violation) * step_mag_max
+    step_mag_max = (
+        sphere_violation * step_mag_max_sphere + (1 - sphere_violation) * step_mag_max
+    )
     step_mag = gs.maximum(gs.minimum(step_mag, step_mag_max), 0)
     base_point = base_point + step_mag[:, None] * step_dir
-    base_point = (1 - eps) * sphere_violation[:, None] * base_point + (1 - sphere_violation[:, None]) * base_point
+    base_point = (1 - eps) * sphere_violation[:, None] * base_point + (
+        1 - sphere_violation[:, None]
+    ) * base_point
     diff = A @ base_point.T - b[:, None]
     idx = diff >= -eps2
     base_point = base_point + (A.T @ (-(gs.abs(diff) + eps) * idx)).T
     return base_point, step_mag, step_mag_argmax, sphere_violation[:, None]
 
+
 def reflect(
-        base_point, step, A, b, S, r,
-        eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
+    base_point, step, A, b, S, r, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
 ):
     """
     Given a set of N vectors rp in a d-polytope compute the
@@ -85,18 +91,29 @@ def reflect(
         _, _, remaining_step_mag = val
         return gs.any(remaining_step_mag > 0)
 
-    def reflect_body(val, _):
+    def reflect_body(val):
         # compute the amount we can scale in the
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
         base_point, step_dir, remaining_step_mag = val
         base_point, step_mag, step_mag_argmax, sphere_violation = bounded_step(
-            base_point, step_dir, remaining_step_mag, A, b, S, r, eps=eps, eps2=eps2, max_val=max_val
+            base_point,
+            step_dir,
+            remaining_step_mag,
+            A,
+            b,
+            S,
+            r,
+            eps=eps,
+            eps2=eps2,
+            max_val=max_val,
         )
         # we are going to reflect around the face
         # we land on, so we grab that face from T
         # and normalize it
-        normal_face = (1 - sphere_violation) * A[step_mag_argmax, :] + sphere_violation * S * base_point
+        normal_face = (1 - sphere_violation) * A[
+            step_mag_argmax, :
+        ] + sphere_violation * S * base_point
         normal_face = normal_face / gs.sqrt(gs.sum(normal_face**2, axis=-1))[:, None]
         # this is the reflection: note we only
         # need to reflect the direction vector s
@@ -106,7 +123,9 @@ def reflect(
         # where r is the reflection. for the
         # vectorized case we compute the row-wise
         # dot products using gs.sum(s * n, axis=-1)
-        step_dir = step_dir - (2 * gs.sum(step_dir * normal_face, axis=-1)[:, None] * normal_face)
+        step_dir = step_dir - (
+            2 * gs.sum(step_dir * normal_face, axis=-1)[:, None] * normal_face
+        )
         # because n and s are normalized the
         # resulting s should be normalized too
         # we renormalize for numberical stabilty
@@ -120,24 +139,45 @@ def reflect(
 
     step_mag = gs.sqrt(gs.sum(step**2, axis=-1))
     step_dir = step / step_mag[:, None]
-    base_point, _, _ = bounded_while_loop(
-        reflect_cond, reflect_body, (base_point, step_dir, step_mag), max_iter
+    base_point, _, _ = while_loop(
+        reflect_cond,
+        reflect_body,
+        (base_point, step_dir, step_mag),
+        max_steps=max_iter,
+        kind="bounded",
     )
 
     return base_point
 
 
 class PolytopeAndSphere(Manifold):
-
     def __init__(
-        self, T=None, b=None, S=None, r=None,
-        npz=None, metric=None, metric_type="Reflected", eps=1e-6, **kwargs
+        self,
+        T=None,
+        b=None,
+        S=None,
+        r=None,
+        npz=None,
+        metric=None,
+        metric_type="Reflected",
+        eps=1e-6,
+        **kwargs,
     ):
         if npz is not None:
             data = np.load(npz)
-            self.T, self.b, self.S, self.r = gs.array(data["T"]), gs.array(data["b"]), gs.array(data["S"]), gs.array(data["R"])
+            self.T, self.b, self.S, self.r = (
+                gs.array(data["T"]),
+                gs.array(data["b"]),
+                gs.array(data["S"]),
+                gs.array(data["R"]),
+            )
         elif T is not None and b is not None:
-            self.T, self.b, self.S, self.r = gs.array(T), gs.array(b), gs.array(S), gs.array(r)
+            self.T, self.b, self.S, self.r = (
+                gs.array(T),
+                gs.array(b),
+                gs.array(S),
+                gs.array(r),
+            )
         else:
             raise ValueError(
                 "You need either the inequality matrices or "
@@ -146,11 +186,17 @@ class PolytopeAndSphere(Manifold):
         dim = self.T.shape[1]
         if metric is None:
             if metric_type == "Reflected":
-                metric = ReflectedPolytopeAndSphereMetric(self.T, self.b, self.S, self.r)
+                metric = ReflectedPolytopeAndSphereMetric(
+                    self.T, self.b, self.S, self.r
+                )
             elif metric_type == "Rejection":
-                metric = RejectionPolytopeAndSphereMetric(self.T, self.b, self.S, self.r)
+                metric = RejectionPolytopeAndSphereMetric(
+                    self.T, self.b, self.S, self.r
+                )
             elif metric_type == "Hessian":
-                metric = HessianPolytopeAndSphereMetric(self.T, self.b, self.S, self.r, eps=eps)
+                metric = HessianPolytopeAndSphereMetric(
+                    self.T, self.b, self.S, self.r, eps=eps
+                )
             else:
                 raise NotImplementedError
 
@@ -165,9 +211,9 @@ class PolytopeAndSphere(Manifold):
             cp.Maximize(d),
             [
                 self.T @ xc.T + d * cp.norm(self.T, axis=1) <= self.b,
-                cp.sum(cp.multiply(self.S, xc)**2) <= self.r,
-                d >= 0
-            ]
+                cp.sum(cp.multiply(self.S, xc) ** 2) <= self.r,
+                d >= 0,
+            ],
         )
         problem.solve()
 
@@ -235,10 +281,12 @@ class PolytopeAndSphere(Manifold):
 
     def distance_to_boundary(self, x):
         T, b, S, r = self.T, self.b, self.S, self.r
-        vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
+        vec_T = jax.numpy.sqrt(jax.numpy.sum(T**2, axis=1))
         polytope_distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
         sphere_distances = jax.numpy.abs(gs.linalg.norm(S * x, axis=1) - r)
-        return jax.numpy.minimum(jax.numpy.min(polytope_distances, axis=0), sphere_distances)
+        return jax.numpy.minimum(
+            jax.numpy.min(polytope_distances, axis=0), sphere_distances
+        )
 
 
 class ReflectedPolytopeAndSphereMetric(EuclideanMetric):
@@ -263,8 +311,9 @@ class RejectionPolytopeAndSphereMetric(EuclideanMetric):
 
     def exp(self, tangent_vec, base_point, **kwargs):
         new_point = base_point + tangent_vec
-        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0) & \
-               (gs.linalg.norm(self.S * new_point, axis=1) < self.r)
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0) & (
+            gs.linalg.norm(self.S * new_point, axis=1) < self.r
+        )
         base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
         return base_point
 
@@ -283,18 +332,23 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
             affine_res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
             affine = self.T.T @ gs.diag(affine_res**-2) @ self.T
 
-            sphere_norm_sq = gs.sum((self.S * x)**2)
+            sphere_norm_sq = gs.sum((self.S * x) ** 2)
             sphere_norm = gs.sqrt(sphere_norm_sq)
             # sphere_res = (gs.maximum(self.r - sphere_norm, 0) + self.eps)
             # sphere_outer = gs.outer(self.S * x, self.S * x)
-            sphere_res1 = sphere_norm_sq**(3/2) * (gs.maximum(self.r - sphere_norm, 0) + self.eps)
-            sphere = gs.outer(self.S * x, self.S * x) * sphere_res1**(-1)
-            sphere_res2 = gs.maximum(self.r * sphere_norm - sphere_norm_sq, 0) + self.eps
+            sphere_res1 = sphere_norm_sq ** (3 / 2) * (
+                gs.maximum(self.r - sphere_norm, 0) + self.eps
+            )
+            sphere = gs.outer(self.S * x, self.S * x) * sphere_res1 ** (-1)
+            sphere_res2 = (
+                gs.maximum(self.r * sphere_norm - sphere_norm_sq, 0) + self.eps
+            )
             sphere -= gs.eye(x.shape[0]) * sphere_res2**-1
             # sphere = sphere_outer / (sphere_norm_sq * sphere_res) * (sphere_norm**-1 + sphere_res**-1)
             # sphere -= gs.diag(self.S) / (sphere_norm * sphere_res)
 
             return affine - sphere
+
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
@@ -311,8 +365,9 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
         new_point = base_point + tangent_vec
-        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0) & \
-               (gs.linalg.norm(self.S * new_point, axis=1) < self.r)
+        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0) & (
+            gs.linalg.norm(self.S * new_point, axis=1) < self.r
+        )
         base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
         return base_point
 
@@ -320,6 +375,4 @@ class HessianPolytopeAndSphereMetric(RiemannianMetric):
         return gs.linalg.norm(vector, axis=-1)
 
     def squared_norm(self, vector, base_point=None):
-        return self.norm(vector, base_point=base_point)**2
-
-
+        return self.norm(vector, base_point=base_point) ** 2

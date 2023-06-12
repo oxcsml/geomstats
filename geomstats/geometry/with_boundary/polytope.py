@@ -7,28 +7,30 @@ import numpy as np
 import jax.numpy as gs
 import geomstats.backend as bs
 
-from diffrax.misc import bounded_while_loop
+# from diffrax.misc import bounded_while_loop
+from equinox.internal import while_loop
 
 import cvxpy as cp
 import jax.experimental.host_callback as hcb
 
 diagm = jax.vmap(gs.diag)
 
+
 def proj(inp):
     A, b, base_point = inp
     X = cp.Variable(base_point.shape)
     problem = cp.Problem(
-        cp.Minimize(cp.sum_squares(X - base_point)),
-        [A @ X.T <= b[:, None]]
+        cp.Minimize(cp.sum_squares(X - base_point)), [A @ X.T <= b[:, None]]
     )
     problem.solve()
     return X.value
 
+
 def device_proj(A, b, x):
     return hcb.call(
-        proj, (A, b, x),
-        result_shape=jax.ShapeDtypeStruct(x.shape, x.dtype)
+        proj, (A, b, x), result_shape=jax.ShapeDtypeStruct(x.shape, x.dtype)
     )
+
 
 # todo: if b is always either M, 1 or M, N then
 # you dont need to expand dims and you can handle
@@ -46,8 +48,7 @@ def stable_div(num, den, eps=1e-10):
 
 
 def bounded_step(
-        base_point, step_dir, step_mag, A, b,
-        eps=1e-6, eps2=1e-8, max_val=1e10
+    base_point, step_dir, step_mag, A, b, eps=1e-6, eps2=1e-8, max_val=1e10
 ):
     step_size_mask = step_mag > 0
     num, den = A @ base_point.T - b[:, None], A @ step_dir.T
@@ -76,8 +77,7 @@ def bounded_step(
 
 
 def reflect(
-        base_point, step, A, b,
-        eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
+    base_point, step, A, b, eps=1e-6, eps2=1e-8, max_val=1e10, max_iter=100_000
 ):
     """
     Given a set of N vectors rp in a d-polytope compute the
@@ -102,13 +102,20 @@ def reflect(
         _, _, remaining_step_mag = val
         return gs.any(remaining_step_mag > 0)
 
-    def reflect_body(val, _):
+    def reflect_body(val):
         # compute the amount we can scale in the
         # direction s before hitting any face,
         # for any of the rp, s vector pairs
         base_point, step_dir, remaining_step_mag = val
         base_point, step_mag, step_mag_argmax = bounded_step(
-            base_point, step_dir, remaining_step_mag, A, b, eps=eps, eps2=eps2, max_val=max_val
+            base_point,
+            step_dir,
+            remaining_step_mag,
+            A,
+            b,
+            eps=eps,
+            eps2=eps2,
+            max_val=max_val,
         )
         # we are going to reflect around the face
         # we land on, so we grab that face from T
@@ -123,7 +130,9 @@ def reflect(
         # where r is the reflection. for the
         # vectorized case we compute the row-wise
         # dot products using gs.sum(s * n, axis=-1)
-        step_dir = step_dir - (2 * gs.sum(step_dir * normal_face, axis=-1)[:, None] * normal_face)
+        step_dir = step_dir - (
+            2 * gs.sum(step_dir * normal_face, axis=-1)[:, None] * normal_face
+        )
         # because n and s are normalized the
         # resulting s should be normalized too
         # we renormalize for numberical stabilty
@@ -137,8 +146,12 @@ def reflect(
 
     step_mag = gs.sqrt(gs.sum(step**2, axis=-1))
     step_dir = step / step_mag[:, None]
-    base_point, _, _ = bounded_while_loop(
-        reflect_cond, reflect_body, (base_point, step_dir, step_mag), max_iter
+    base_point, _, _ = while_loop(
+        reflect_cond,
+        reflect_body,
+        (base_point, step_dir, step_mag),
+        max_steps=max_iter,
+        kind="bounded",
     )
 
     return base_point
@@ -146,7 +159,15 @@ def reflect(
 
 class Polytope(Manifold):
     def __init__(
-        self, T=None, b=None, npz=None, metric=None, proj_type=None, metric_type="Reflected", eps=1e-6, **kwargs
+        self,
+        T=None,
+        b=None,
+        npz=None,
+        metric=None,
+        proj_type=None,
+        metric_type="Reflected",
+        eps=1e-6,
+        **kwargs,
     ):
         if npz is not None:
             data = np.load(npz)
@@ -171,7 +192,7 @@ class Polytope(Manifold):
             elif metric_type == "Hessian":
                 metric = HessianPolytopeMetric(self.T, self.b, eps=eps)
             else:
-                raise NotImplementedError
+                raise NotImplementedError()
 
         super(Polytope, self).__init__(dim=dim, metric=metric)
         self.metric = metric
@@ -182,7 +203,7 @@ class Polytope(Manifold):
 
         problem = cp.Problem(
             cp.Maximize(r),
-            [self.T @ xc.T + r * cp.norm(self.T, axis=1) <= self.b, r >= 0]
+            [self.T @ xc.T + r * cp.norm(self.T, axis=1) <= self.b, r >= 0],
         )
         problem.solve()
 
@@ -258,7 +279,7 @@ class Polytope(Manifold):
 
     def get_distance_to_boundary(self):
         T, b = self.T, self.b
-        vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
+        vec_T = jax.numpy.sqrt(jax.numpy.sum(T**2, axis=1))
 
         def distance_to_boundary(x):
             distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
@@ -268,7 +289,7 @@ class Polytope(Manifold):
 
     def distance_to_boundary(self, x):
         T, b = self.T, self.b
-        vec_T = jax.numpy.sqrt(jax.numpy.sum(T ** 2, axis=1))
+        vec_T = jax.numpy.sqrt(jax.numpy.sum(T**2, axis=1))
         distances = jax.numpy.abs(T @ x.T - b[:, None]) / vec_T[:, None]
         return jax.numpy.min(distances, axis=0)
 
@@ -313,6 +334,7 @@ class HessianPolytopeMetric(RiemannianMetric):
         def calc(x):
             res = gs.maximum(self.b - self.T @ x.T, 0) + self.eps
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
+
         return jax.vmap(calc)(x)
 
     def metric_inverse_matrix_sqrt(self, x):
@@ -337,5 +359,4 @@ class HessianPolytopeMetric(RiemannianMetric):
         return gs.linalg.norm(vector, axis=-1)
 
     def squared_norm(self, vector, base_point=None):
-        return self.norm(vector, base_point=base_point)**2
-
+        return self.norm(vector, base_point=base_point) ** 2
