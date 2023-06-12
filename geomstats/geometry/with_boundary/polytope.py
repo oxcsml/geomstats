@@ -172,10 +172,6 @@ class Polytope(Manifold):
         if npz is not None:
             data = np.load(npz)
             self.T, self.b = gs.array(data["T"]), gs.array(data["b"])
-            if "cube" in npz and proj_type is None:
-                proj_type = "cube"
-            elif "dirichlet" in npz and proj_type is None:
-                proj_type = "triangle"
         elif T is not None and b is not None:
             self.T, self.b = gs.array(T), gs.array(b)
         else:
@@ -191,6 +187,8 @@ class Polytope(Manifold):
                 metric = RejectionPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
                 metric = HessianPolytopeMetric(self.T, self.b, eps=eps)
+            elif metric_type == "Euclidean":
+                metric = EuclideanMetric(dim)
             else:
                 raise NotImplementedError()
 
@@ -336,6 +334,9 @@ class HessianPolytopeMetric(RiemannianMetric):
             return self.T.T @ jax.numpy.diag(res**-2) @ self.T
 
         return jax.vmap(calc)(x)
+    
+    def metric_inverse_matrix(self, x):
+        pass
 
     def metric_inverse_matrix_sqrt(self, x):
         u, s, v = gs.linalg.svd(self.metric_matrix(x), hermitian=True)
