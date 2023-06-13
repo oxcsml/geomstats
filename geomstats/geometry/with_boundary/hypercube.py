@@ -132,6 +132,7 @@ class Hypercube(Manifold):
         return self.random_uniform(rng)
 
     def distance_to_boundary(self, x):
+        return jax.vmap(jax.vmap(coord_dist))(x).min(axis=-1)
         return jnp.sqrt((jax.vmap(jax.vmap(coord_dist))(x) ** 2).sum(axis=-1))
 
     @property
@@ -206,6 +207,8 @@ class HessianHypercubeMetric(EuclideanMetric):
         return new_point
         # dists = s * jax.vmap(jax.vmap(coord_dist))(base_point)
         # return jax.vmap(jax.vmap(analytic_exp))(base_point, (1 / dists) * tangent_vec)
+        # return jax.vmap(jax.vmap(analytic_exp))(base_point, tangent_vec)
+
         # x = base_point
         # tv = (1 / jnp.sqrt(s)) * tangent_vec
 
