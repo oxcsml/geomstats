@@ -89,7 +89,7 @@ class Hypercube(Manifold):
         return jax.random.uniform(state, (n_samples, self.dim))
 
     def random_normal_tangent(self, state, base_point, n_samples=1):
-        return jax.random.normal(state, (n_samples, self.dim))
+        return state, jax.random.normal(state, (n_samples, self.dim))
 
     def belongs(self, point, atol=1e-12):
         return belongs(point)
@@ -148,10 +148,12 @@ class HessianHypercubeMetric(EuclideanMetric):
 
     def metric_inverse_matrix_sqrt(self, x):
         dists = jax.vmap(jax.vmap(coord_dist))(x)
+        # return jax.vmap(jnp.diag, in_axes=0)(dists)
         return dists
 
     def metric_inverse_matrix(self, x):
         dists = jax.vmap(jax.vmap(coord_dist))(x)
+        # return jax.vmap(jnp.diag, in_axes=0)(dists**2)
         return dists**2
 
     def div_metric_inverse_matrix(self, x):
