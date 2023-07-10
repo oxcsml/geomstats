@@ -27,7 +27,7 @@ if __name__ == "__main__":
         else:
             install_requires.append(requirement)
 
-    dev_requirements = parse_requirements_file("dev-requirements.txt")
+    dev_requirements = [] # parse_requirements_file("dev-requirements.txt")
     extras_require = {"test": dev_requirements, **optional_dependencies}
     extras_require["all"] = list(chain(*extras_require.values()))
 
