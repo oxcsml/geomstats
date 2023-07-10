@@ -16,7 +16,7 @@ def parse_requirements_file(filename):
 
 
 if __name__ == "__main__":
-    requirements = parse_requirements_file("requirements.txt")
+    requirements = [] # parse_requirements_file("requirements.txt")
     install_requires = []
     optional_dependencies = {}
     for requirement in requirements:
