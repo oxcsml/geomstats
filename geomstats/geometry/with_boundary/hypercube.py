@@ -19,6 +19,34 @@ def diff_coord_dist(x):
     return -1 + 2 * (x < 0.5)
 
 
+def analytic_exp(x, tv):
+    c1 = jnp.log(x)
+    c2 = -jnp.log(-4 * (x - 1))
+
+    t_half_1 = jnp.log(0.5) - c1
+    t_half_2 = jnp.log(0.5) - c2
+
+    c_half_1 = jnp.log(0.5)
+    c_half_2 = -jnp.log(-4 * (0.5 - 1))
+
+    no_change_exp_1 = jnp.exp(c1 + tv)
+    change_exp_1 = 1 - 1 / 4 * jnp.exp(-c_half_2 - (tv - t_half_1))
+
+    no_change_exp_2 = 1 - 1 / 4 * jnp.exp(-c2 - tv)
+    change_exp_2 = jnp.exp(c_half_1 + (tv - t_half_2))
+
+    xgth_tv_neg = jnp.where(tv > t_half_2, no_change_exp_2, change_exp_2)
+    xlth_tv_neg = jnp.exp(c1 + tv)
+
+    xlth_tv_pos = jnp.where(tv < t_half_1, no_change_exp_1, change_exp_1)
+    xgth_tv_pos = 1 - 1 / 4 * jnp.exp(-c2 - (tv))
+
+    tv_neg = jnp.where(x < 0.5, xlth_tv_neg, xgth_tv_neg)
+    tv_pos = jnp.where(x < 0.5, xlth_tv_pos, xgth_tv_pos)
+
+    return jnp.where(tv > 0, tv_pos, tv_neg)
+
+
 def belongs(point):
     return gs.all(gs.bitwise_and(point > 0, point < 1), axis=-1)
 
@@ -104,6 +132,7 @@ class Hypercube(Manifold):
         return self.random_uniform(rng)
 
     def distance_to_boundary(self, x):
+        return jax.vmap(jax.vmap(coord_dist))(x).min(axis=-1)
         return jnp.sqrt((jax.vmap(jax.vmap(coord_dist))(x) ** 2).sum(axis=-1))
 
     @property
@@ -137,25 +166,32 @@ class ReflectedHypercubeMetric(EuclideanMetric):
         return jax.vmap(jax.vmap(exp_1d))(base_point, tangent_vec)
 
 
+s = 1.0
+
+
 class HessianHypercubeMetric(EuclideanMetric):
     def __init__(self, dim, default_point_type="vector", eps=1e-6):
         super().__init__(dim, default_point_type)
         self.eps = eps
 
     def metric_matrix(self, x):
-        dists = jax.vmap(jax.vmap(coord_dist))(x)
+        dists = s * jax.vmap(jax.vmap(coord_dist))(x)
         return 1 / dists**2
 
     def metric_inverse_matrix_sqrt(self, x):
-        dists = jax.vmap(jax.vmap(coord_dist))(x)
+        dists = (1 / jnp.sqrt(s)) * jax.vmap(jax.vmap(coord_dist))(x)
+        # return jax.vmap(jnp.diag, in_axes=0)(dists)
         return dists
 
     def metric_inverse_matrix(self, x):
-        dists = jax.vmap(jax.vmap(coord_dist))(x)
+        dists = (1 / s) * jax.vmap(jax.vmap(coord_dist))(x)
+        # return jax.vmap(jnp.diag, in_axes=0)(dists**2)
         return dists**2
 
     def div_metric_inverse_matrix(self, x):
-        return jax.vmap(jax.vmap(lambda x: 2 * coord_dist(x) * diff_coord_dist(x)))(x)
+        return (1 / s) * jax.vmap(
+            jax.vmap(lambda x: 2 * coord_dist(x) * diff_coord_dist(x))
+        )(x)
 
     def lambda_x(self, x):
         # return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
@@ -171,32 +207,40 @@ class HessianHypercubeMetric(EuclideanMetric):
         return new_point
         x = base_point
         tv = tangent_vec
+        new_point = new_point.clip(0, 1)
+        return new_point
+        # dists = s * jax.vmap(jax.vmap(coord_dist))(base_point)
+        # return jax.vmap(jax.vmap(analytic_exp))(base_point, (1 / dists) * tangent_vec)
+        # return jax.vmap(jax.vmap(analytic_exp))(base_point, tangent_vec)
 
-        c1 = gs.log(x)
-        c2 = -gs.log(-4 * (x - 1))
+        # x = base_point
+        # tv = (1 / jnp.sqrt(s)) * tangent_vec
 
-        t_half_1 = gs.log(0.5) - c1
-        t_half_2 = gs.log(0.5) - c2
+        # c1 = gs.log(x)
+        # c2 = -gs.log(-4 * (x - 1))
 
-        c_half_1 = gs.log(0.5)
-        c_half_2 = -gs.log(-4 * (0.5 - 1))
+        # t_half_1 = gs.log(0.5) - c1
+        # t_half_2 = gs.log(0.5) - c2
 
-        no_change_exp_1 = gs.exp(c1 + tv)
-        change_exp_1 = 1 - 1 / 4 * gs.exp(-c_half_2 - (tv - t_half_1))
+        # c_half_1 = gs.log(0.5)
+        # c_half_2 = -gs.log(-4 * (0.5 - 1))
 
-        no_change_exp_2 = 1 - 1 / 4 * gs.exp(-c2 - tv)
-        change_exp_2 = gs.exp(c_half_1 + (tv - t_half_2))
+        # no_change_exp_1 = gs.exp(c1 + tv)
+        # change_exp_1 = 1 - 1 / 4 * gs.exp(-c_half_2 - (tv - t_half_1))
 
-        xgth_tv_neg = gs.where(tv > t_half_2, no_change_exp_2, change_exp_2)
-        xlth_tv_neg = gs.exp(c1 + tv)
+        # no_change_exp_2 = 1 - 1 / 4 * gs.exp(-c2 - tv)
+        # change_exp_2 = gs.exp(c_half_1 + (tv - t_half_2))
 
-        xlth_tv_pos = gs.where(tv < t_half_1, no_change_exp_1, change_exp_1)
-        xgth_tv_pos = 1 - 1 / 4 * gs.exp(-c2 - (tv))
+        # xgth_tv_neg = gs.where(tv > t_half_2, no_change_exp_2, change_exp_2)
+        # xlth_tv_neg = gs.exp(c1 + tv)
 
-        tv_neg = gs.where(x < 0.5, xlth_tv_neg, xgth_tv_neg)
-        tv_pos = gs.where(x < 0.5, xlth_tv_pos, xgth_tv_pos)
+        # xlth_tv_pos = gs.where(tv < t_half_1, no_change_exp_1, change_exp_1)
+        # xgth_tv_pos = 1 - 1 / 4 * gs.exp(-c2 - (tv))
 
-        return gs.where(tv > 0, tv_pos, tv_neg).clip(self.eps, 1 - self.eps)
+        # tv_neg = gs.where(x < 0.5, xlth_tv_neg, xgth_tv_neg)
+        # tv_pos = gs.where(x < 0.5, xlth_tv_pos, xgth_tv_pos)
+
+        # return gs.where(tv > 0, tv_pos, tv_neg).clip(self.eps, 1 - self.eps)
 
     def norm(self, vector, base_point=None):
         return gs.linalg.norm(vector, axis=-1)
