@@ -166,9 +166,9 @@ class HessianHypercubeMetric(EuclideanMetric):
 
     def exp(self, tangent_vec, base_point, **kwargs):
         """Use a retraction instead of the true exponential map."""
-        # new_point = base_point + tangent_vec
-        # new_point = new_point.clip(0, 1)
-        # return new_point
+        new_point = base_point + tangent_vec
+        new_point = new_point.clip(self.eps, 1 - self.eps)
+        return new_point
         x = base_point
         tv = tangent_vec
 
