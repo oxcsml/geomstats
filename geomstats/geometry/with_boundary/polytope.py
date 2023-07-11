@@ -1,11 +1,10 @@
 """Euclidean space."""
 from geomstats.geometry.manifold import Manifold
 from geomstats.geometry.riemannian_metric import RiemannianMetric
-from geomstats.geometry.euclidean import EuclideanMetric, Euclidean
+from geomstats.geometry.euclidean import EuclideanMetric
 import jax
 import numpy as np
 import jax.numpy as gs
-import geomstats.backend as bs
 
 # from diffrax.misc import bounded_while_loop
 from equinox.internal import while_loop
@@ -244,9 +243,10 @@ class Polytope(Manifold):
         tangent_vec : array-like, shape=[..., dim]
             Tangent vector at base point.
         """
-        state, ambiant_noise = bs.random.normal(state=state, size=(n_samples, self.dim))
+        rng, next_rng = jax.random.split(state)
+        ambiant_noise = jax.random.normal(next_rng, shape=(n_samples, self.dim))
         chart_noise = self.to_tangent(ambiant_noise, base_point)
-        return state, chart_noise
+        return rng, chart_noise
 
     def random_walk(self, rng, x, t):
         return None
