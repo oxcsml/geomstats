@@ -11,10 +11,11 @@ from itertools import product
 from scipy.stats import beta
 
 import geomstats.algebra_utils as utils
-import jax.numpy as gs
+import geomstats.backend as gs
 from geomstats.geometry.base import EmbeddedManifold
 from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
 from geomstats.geometry.riemannian_metric import RiemannianMetric
+from geomstats.geometry.special_orthogonal import SpecialOrthogonal
 import jax
 
 
@@ -63,7 +64,7 @@ class _Hypersphere(EmbeddedManifold):
             value=1.0,
             tangent_submersion=lambda v, x: 2 * gs.sum(x * v, axis=-1),
         )
-        self.isom_group = None
+        self.isom_group = SpecialOrthogonal(n=dim + 1)
         self.c = 1.0
 
     @property
@@ -312,8 +313,8 @@ class _Hypersphere(EmbeddedManifold):
             Points sampled on the hypersphere.
         """
         size = (n_samples, self.dim + 1)
-        state, next_state = jax.random.split(state)
-        samples = jax.random.normal(next_state, shape=size)
+
+        _, samples = gs.random.normal(state=state, size=size)
         norms = gs.linalg.norm(samples, axis=1)
         samples = gs.einsum("..., ...i->...i", 1 / norms, samples)
         # if n_samples == 1:
@@ -351,7 +352,7 @@ class _Hypersphere(EmbeddedManifold):
     #         samples = gs.squeeze(samples, axis=0)
     #     return samples
 
-    def random_von_mises_fisher(self, state, mu=None, kappa=10, n_samples=1, max_iter=100):
+    def random_von_mises_fisher(self, mu=None, kappa=10, n_samples=1, max_iter=100):
         """Sample with the von Mises-Fisher distribution.
 
         This distribution corresponds to the maximum entropy distribution
@@ -391,12 +392,10 @@ class _Hypersphere(EmbeddedManifold):
         dim = self.dim
 
         if dim == 2:
-            state, next_state = jax.random.split(state)
-            angle = 2.0 * gs.pi * jax.random.uniform(next_state, n_samples)
+            angle = 2.0 * gs.pi * gs.random.rand(n_samples)
             angle = gs.to_ndarray(angle, to_ndim=2, axis=1)
             unit_vector = gs.hstack((gs.cos(angle), gs.sin(angle)))
-            state, next_state = jax.random.split(state)
-            scalar = jax.random.uniform(next_state, n_samples)
+            scalar = gs.random.rand(n_samples)
 
             coord_x = 1.0 + 1.0 / kappa * gs.log(
                 scalar + (1.0 - scalar) * gs.exp(gs.array(-2.0 * kappa))
@@ -420,8 +419,7 @@ class _Hypersphere(EmbeddedManifold):
                 coord_x = (1 - (1 + envelop_param) * sym_beta) / (
                     1 - (1 - envelop_param) * sym_beta
                 )
-                state, next_state = jax.random.split(state)
-                accept_tol = jax.random.uniform(next_state, n_samples - n_accepted)
+                accept_tol = gs.random.rand(n_samples - n_accepted)
                 criterion = (
                     kappa * coord_x + dim * gs.log(1 - node * coord_x) - correction
                 ) > gs.log(accept_tol)
@@ -446,7 +444,7 @@ class _Hypersphere(EmbeddedManifold):
         return sample if (n_samples > 1) else sample[0]
 
     def random_riemannian_normal(
-        self, state, mean=None, precision=None, n_samples=1, max_iter=100
+        self, mean=None, precision=None, n_samples=1, max_iter=100
     ):
         r"""Sample from the Riemannian normal distribution.
 
@@ -516,14 +514,11 @@ class _Hypersphere(EmbeddedManifold):
             return threshold_val, squared_norm**0.5
 
         while (n_accepted < n_samples) and (n_iter < max_iter):
-            
-            state, next_state = jax.random.split(state)
-            envelope = jax.random.multivariate_normal(
-                next_state, gs.zeros(dim), tangent_cov
-            ).sample(size=(n_samples - n_accepted,))
+            envelope = gs.random.multivariate_normal(
+                gs.zeros(dim), tangent_cov, size=(n_samples - n_accepted,)
+            )
             thresh, norm = threshold(envelope)
-            state, next_state = jax.random.split(state)
-            proposal = jax.random.uniform(next_state, n_samples - n_accepted)
+            proposal = gs.random.rand(n_samples - n_accepted)
             criterion = gs.logical_and(norm <= gs.pi, proposal <= thresh)
             result.append(envelope[criterion])
             n_accepted += gs.sum(criterion)
@@ -652,7 +647,7 @@ class _Hypersphere(EmbeddedManifold):
     def stereographic_projection(self, x):
         xi = x[..., [0]]
         x = x[..., 1:]
-        out = x / (1 + gs.sqrt(self.c) * xi + 1e-8)
+        out = x / (1 + gs.sqrt(self.c) * xi + gs.atol)
         return out
 
     def inv_stereographic_projection(self, y):
