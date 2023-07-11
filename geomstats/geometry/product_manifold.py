@@ -249,7 +249,7 @@ class ProductManifold(Manifold):
             tangent_vec = gs.stack(tangent_vec, axis=-2)
         return tangent_vec
 
-    def is_tangent(self, vector, base_point, atol=gs.atol):
+    def is_tangent(self, vector, base_point, atol=1e-8):
         """Check whether the vector is tangent at base_point.
         The tangent space of the product manifold is the direct sum of
         tangent spaces.
@@ -352,7 +352,7 @@ class ProductSameManifold(Manifold):
         # value : shape=[..., mul, dim] -> shape=[..., mul*dim]
         return out
 
-    def belongs(self, point, atol=gs.atol):
+    def belongs(self, point, atol=1e-8):
         belongs = self._iterate_over_manifolds(
             "belongs",
             {"point": point, "atol": atol},
@@ -423,7 +423,7 @@ class ProductSameManifold(Manifold):
         ambiant_noise = jax.random.normal(next_state, shape=size)
         return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
 
-    def is_tangent(self, vector, base_point, atol=gs.atol):
+    def is_tangent(self, vector, base_point, atol=1e-8):
         is_tangent = self._iterate_over_manifolds(
             "is_tangent",
             {"vector": vector, "base_point": base_point, "atol": atol},
