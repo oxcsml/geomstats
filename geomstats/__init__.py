@@ -9,6 +9,7 @@ import geomstats.geometry.euclidean
 import geomstats.geometry.lie_algebra
 import geomstats.geometry.lie_group
 import geomstats.geometry.manifold
+import geomstats.geometry.minkowski
 import geomstats.geometry.product_manifold
 import geomstats.geometry.product_riemannian_metric
 import geomstats.geometry.riemannian_metric
