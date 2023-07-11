@@ -15,7 +15,7 @@ import geomstats.backend as gs
 from geomstats.geometry.base import EmbeddedManifold
 from geomstats.geometry.euclidean import Euclidean, EuclideanMetric
 from geomstats.geometry.riemannian_metric import RiemannianMetric
-from geomstats.geometry.special_orthogonal import SpecialOrthogonal
+# from geomstats.geometry.special_orthogonal import SpecialOrthogonal
 import jax
 
 
@@ -64,7 +64,7 @@ class _Hypersphere(EmbeddedManifold):
             value=1.0,
             tangent_submersion=lambda v, x: 2 * gs.sum(x * v, axis=-1),
         )
-        self.isom_group = SpecialOrthogonal(n=dim + 1)
+        self.isom_group = None # SpecialOrthogonal(n=dim + 1)
         self.c = 1.0
 
     @property

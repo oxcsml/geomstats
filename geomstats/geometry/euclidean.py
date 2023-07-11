@@ -1,11 +1,14 @@
 """Euclidean space."""
 
 import math
-import geomstats.backend as gs
+
 from geomstats.geometry.base import VectorSpace
 from geomstats.geometry.riemannian_metric import RiemannianMetric
 
+import jax
 import jax.numpy as jnp
+
+gs = jnp
 
 class Euclidean(VectorSpace):
     """Class for Euclidean spaces.
@@ -199,7 +202,7 @@ class EuclideanMetric(RiemannianMetric):
         return self.dim
 
     def grad(self, func):
-        return lambda x: gs.autodiff.grad(func)(x)
+        return lambda x: jax.grad(func)(x)
     
     def transpfrom0(self, y, v):
         return v
