@@ -89,7 +89,7 @@ class ProductManifold(Manifold):
         )
         return out
 
-    def belongs(self, point, atol=gs.atol):
+    def belongs(self, point, atol=1e-8):
         """Test if a point belongs to the manifold.
         Parameters
         ----------

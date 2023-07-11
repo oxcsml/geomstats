@@ -652,7 +652,7 @@ class _Hypersphere(EmbeddedManifold):
     def stereographic_projection(self, x):
         xi = x[..., [0]]
         x = x[..., 1:]
-        out = x / (1 + gs.sqrt(self.c) * xi + gs.atol)
+        out = x / (1 + gs.sqrt(self.c) * xi + 1e-8)
         return out
 
     def inv_stereographic_projection(self, y):
