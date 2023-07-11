@@ -2,7 +2,7 @@
 
 import joblib
 
-import geomstats.backend as gs
+import jax.numpy as gs
 import geomstats.errors
 import geomstats.vectorization
 from geomstats.geometry.manifold import Manifold
@@ -419,7 +419,8 @@ class ProductSameManifold(Manifold):
 
     def random_normal_tangent(self, state, base_point, n_samples=1):
         size = (n_samples, self.mul * self.manifold.embedding_space.dim)
-        state, ambiant_noise = gs.random.normal(state=state, size=size)
+        state, next_state = jax.random.split(state)
+        ambiant_noise = jax.random.normal(next_state, shape=size)
         return state, self.to_tangent(vector=ambiant_noise, base_point=base_point)
 
     def is_tangent(self, vector, base_point, atol=gs.atol):
