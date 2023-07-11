@@ -26,7 +26,7 @@ class VectorSpace(Manifold, abc.ABC):
         super(VectorSpace, self).__init__(default_point_type=default_point_type, **kwargs)
         self.shape = shape
 
-    def belongs(self, point, atol=1e-8):
+    def belongs(self, point, atol=gs.atol):
         """Evaluate if the point belongs to the vector space.
 
         This method checks the shape of the input point.
@@ -73,7 +73,7 @@ class VectorSpace(Manifold, abc.ABC):
         """
         return point
 
-    def is_tangent(self, vector, base_point=None, atol=1e-8):
+    def is_tangent(self, vector, base_point=None, atol=gs.atol):
         """Check whether the vector is tangent at base_point.
 
         Tangent vectors are identified with points of the vector space so
@@ -195,7 +195,7 @@ class EmbeddedManifold(Manifold, abc.ABC):
         self.value = value
         self.tangent_submersion = tangent_submersion
 
-    def belongs(self, point, atol=1e-8):
+    def belongs(self, point, atol=gs.atol):
         """Evaluate if a point belongs to the manifold.
 
         Parameters
@@ -222,7 +222,7 @@ class EmbeddedManifold(Manifold, abc.ABC):
             constraint = gs.all(constraint, axis=-1)
         return gs.logical_and(belongs, constraint)
 
-    def is_tangent(self, vector, base_point, atol=1e-8):
+    def is_tangent(self, vector, base_point, atol=gs.atol):
         """Check whether the vector is tangent at base_point.
 
         Parameters
@@ -389,7 +389,7 @@ class OpenSet(Manifold, abc.ABC):
         super().__init__(dim=dim, **kwargs)
         self.ambient_space = ambient_space
 
-    def is_tangent(self, vector, base_point=None, atol=1e-8):
+    def is_tangent(self, vector, base_point=None, atol=gs.atol):
         """Check whether the vector is tangent at base_point.
 
         Parameters
