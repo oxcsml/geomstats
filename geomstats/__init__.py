@@ -1,5 +1,6 @@
 __version__ = "2.3.1"
 
+import geomstats._backend
 import geomstats.geometry.euclidean
 import geomstats.geometry.hypersphere
 import geomstats.geometry.euclidean
