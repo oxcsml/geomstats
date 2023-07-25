@@ -9,34 +9,15 @@ import jax.numpy as gs
 # from diffrax.misc import bounded_while_loop
 from equinox.internal import while_loop
 
-import cvxpy as cp
-import jax.experimental.host_callback as hcb
+
 
 diagm = jax.vmap(gs.diag)
-
-
-def proj(inp):
-    A, b, base_point = inp
-    X = cp.Variable(base_point.shape)
-    problem = cp.Problem(
-        cp.Minimize(cp.sum_squares(X - base_point)), [A @ X.T <= b[:, None]]
-    )
-    problem.solve()
-    return X.value
-
-
-def device_proj(A, b, x):
-    return hcb.call(
-        proj, (A, b, x), result_shape=jax.ShapeDtypeStruct(x.shape, x.dtype)
-    )
-
 
 # todo: if b is always either M, 1 or M, N then
 # you dont need to expand dims and you can handle
 # different b with the same T matrix: this is nice
 # because in our setting the T matrix is always the
 # same; all that changes is the b values!
-
 
 def stable_div(num, den, eps=1e-10):
     return (
@@ -182,8 +163,6 @@ class Polytope(Manifold):
         if metric is None:
             if metric_type == "Reflected":
                 metric = ReflectedPolytopeMetric(self.T, self.b)
-            elif metric_type == "Rejection":
-                metric = RejectionPolytopeMetric(self.T, self.b)
             elif metric_type == "Hessian":
                 metric = HessianPolytopeMetric(self.T, self.b, eps=eps)
             elif metric_type == "Euclidean":
@@ -250,14 +229,6 @@ class Polytope(Manifold):
 
     def random_walk(self, rng, x, t):
         return None
-        rng, z = self.random_normal_tangent(
-            state=rng, base_point=x, n_samples=x.shape[0]
-        )
-        if len(t.shape) == len(x.shape) - 1:
-            t = t[..., None]
-        tangent_vector = gs.sqrt(t) * z
-        samples = self.exp(tangent_vec=tangent_vector, base_point=x)
-        return samples
 
     def belongs(self, x, atol=1e-12):
         return np.all(self.T @ x.T <= self.b[:, None] + atol, axis=0)
@@ -304,21 +275,6 @@ class ReflectedPolytopeMetric(EuclideanMetric):
         return reflect(base_point, tangent_vec, self.T, self.b)
 
 
-class RejectionPolytopeMetric(EuclideanMetric):
-    def __init__(self, T, b, default_point_type="vector", **kwargs):
-        self.T, self.b = T, b
-        dim = self.T.shape[1]
-        super(RejectionPolytopeMetric, self).__init__(
-            dim=dim, default_point_type=default_point_type
-        )
-
-    def exp(self, tangent_vec, base_point, **kwargs):
-        new_point = base_point + tangent_vec
-        mask = gs.all(self.T @ new_point.T < self.b[:, None], axis=0)
-        base_point = (1 - mask[:, None]) * base_point + mask[:, None] * new_point
-        return base_point
-
-
 class HessianPolytopeMetric(RiemannianMetric):
     def __init__(self, T, b, eps=1e-6, default_point_type="vector", **kwargs):
         self.T, self.b = T, b
@@ -343,7 +299,6 @@ class HessianPolytopeMetric(RiemannianMetric):
         return u @ diagm(gs.sqrt(s**-1)) @ v
 
     def lambda_x(self, x):
-        # return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
         return 1.0
 
     def grad_logdet_metric_matrix(self, x):

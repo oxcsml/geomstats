@@ -6,10 +6,6 @@ import jax.numpy as gs
 
 jnp = gs
 
-import cvxpy as cp
-import jax.experimental.host_callback as hcb
-
-
 def coord_dist(x):
     return gs.min(gs.stack([x, 1 - x], axis=-1), axis=-1)
 
@@ -99,8 +95,6 @@ class Hypercube(Manifold):
     def __init__(self, dim, metric_type="reflected"):
         if metric_type == "Reflected":
             metric = ReflectedHypercubeMetric(dim)
-        elif metric_type == "Rejection":
-            metric = RejectionHypercubeMetric(dim)
         elif metric_type == "Hessian":
             metric = HessianHypercubeMetric(dim)
         else:
@@ -132,7 +126,6 @@ class Hypercube(Manifold):
 
     def distance_to_boundary(self, x):
         return jax.vmap(jax.vmap(coord_dist))(x).min(axis=-1)
-        return jnp.sqrt((jax.vmap(jax.vmap(coord_dist))(x) ** 2).sum(axis=-1))
 
     @property
     def identity(self):
@@ -179,12 +172,10 @@ class HessianHypercubeMetric(EuclideanMetric):
 
     def metric_inverse_matrix_sqrt(self, x):
         dists = (1 / jnp.sqrt(s)) * jax.vmap(jax.vmap(coord_dist))(x)
-        # return jax.vmap(jnp.diag, in_axes=0)(dists)
         return dists
 
     def metric_inverse_matrix(self, x):
         dists = (1 / s) * jax.vmap(jax.vmap(coord_dist))(x)
-        # return jax.vmap(jnp.diag, in_axes=0)(dists**2)
         return dists**2
 
     def div_metric_inverse_matrix(self, x):
@@ -193,7 +184,6 @@ class HessianHypercubeMetric(EuclideanMetric):
         )(x)
 
     def lambda_x(self, x):
-        # return -1 / 2 * gs.linalg.slogdet(self.metric_matrix(x))[1]
         return 1.0
 
     def grad_logdet_metric_matrix(self, x):
@@ -243,12 +233,3 @@ class HessianHypercubeMetric(EuclideanMetric):
     def squared_norm(self, vector, base_point=None):
         return self.norm(vector, base_point=base_point) ** 2
 
-
-class RejectionHypercubeMetric(EuclideanMetric):
-    def __init__(self, dim, default_point_type="vector"):
-        super().__init__(dim, default_point_type)
-
-    def exp(self, tangent_vec, base_point, **kwargs):
-        new_point = base_point + tangent_vec
-        in_bounds = belongs(new_point).astype(float)
-        return gs.where(in_bounds[:, None], new_point, base_point)
